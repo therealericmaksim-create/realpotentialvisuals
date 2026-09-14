@@ -25,7 +25,9 @@ export const metadata: Metadata = {
     title: "RealPotential Visuals",
     description:
       "See what your property could look like — before you renovate or list it.",
-    images: ["/images/logo.png"],
+    url: "/",
+    siteName: "RealPotential Visuals",
+    images: [{ url: "/images/logo.png", width: 2172, height: 724 }],
     type: "website",
   },
 };
