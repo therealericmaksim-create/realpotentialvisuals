@@ -336,17 +336,10 @@ export default function Home() {
               <h3>Add a Style</h3>
               <div className="price-line">
                 <span className="lbl">
-                  Believable
-                  <span className="sub">a realistic renovation</span>
+                  Any Style, Your Pick
+                  <span className="sub">we&apos;ll tell you if it&apos;s buildable or conceptual when we deliver it</span>
                 </span>
                 <span className="amt">$39.99</span>
-              </div>
-              <div className="price-line">
-                <span className="lbl">
-                  Conceptual
-                  <span className="sub">a bold reimagining</span>
-                </span>
-                <span className="amt">$79.99</span>
               </div>
             </div>
 
@@ -444,7 +437,10 @@ export default function Home() {
                 Buildable styles are realistic renovations your home could
                 genuinely support. Conceptual styles are bold reimaginings
                 meant to inspire &mdash; not necessarily to build exactly as
-                shown. We label every style honestly.
+                shown. We label every style honestly: for your curated
+                Starter styles we tell you upfront, and for a style you pick
+                yourself, we&apos;ll tell you which one it turned out to be
+                when we deliver it.
               </p>
             </div>
             <div className="faq-item">
