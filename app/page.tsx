@@ -1,38 +1,9 @@
+import SiteHeader from "@/components/SiteHeader";
+
 export default function Home() {
   return (
     <>
-      {/* ======================================================================
-          HEADER / NAV
-          Change the Facebook link in TWO places below (nav button + footer)
-          if your page URL ever changes.
-          ====================================================================== */}
-      <header>
-        <nav className="nav">
-          <a href="#" className="nav-logo">
-            <img src="/images/logo.png" alt="RealPotential Visuals" />
-          </a>
-
-          <input type="checkbox" id="nav-toggle" className="nav-toggle" />
-          <label htmlFor="nav-toggle" className="nav-burger">
-            &#9776;
-          </label>
-
-          <div className="nav-links">
-            <a href="#how">How It Works</a>
-            <a href="#gallery">Gallery</a>
-            <a href="#pricing">Pricing</a>
-            <a href="#contest">Contest</a>
-            <a href="#faq">FAQ</a>
-            <a
-              href="https://www.facebook.com/share/p/1Dz3SZUTPi/"
-              className="btn btn-gold"
-              style={{ padding: "10px 20px", fontSize: "13px" }}
-            >
-              Enter the Contest
-            </a>
-          </div>
-        </nav>
-      </header>
+      <SiteHeader />
 
       {/* ======================================================================
           HERO
@@ -55,6 +26,8 @@ export default function Home() {
             <a
               href="https://www.facebook.com/share/p/1Dz3SZUTPi/"
               className="btn btn-gold"
+              target="_blank"
+              rel="noopener noreferrer"
             >
               Enter Our Free Contest
             </a>
@@ -135,6 +108,8 @@ export default function Home() {
             <a
               href="https://www.facebook.com/share/p/1Dz3SZUTPi/"
               className="btn btn-gold"
+              target="_blank"
+              rel="noopener noreferrer"
             >
               Enter Now on Facebook
             </a>
@@ -142,7 +117,11 @@ export default function Home() {
             <p className="fine">
               No purchase necessary. Open to residents of the continental
               United States with Google Street View coverage, 18+.{" "}
-              <a href="https://www.facebook.com/share/p/1Dz3SZUTPi/">
+              <a
+                href="https://www.facebook.com/share/p/1Dz3SZUTPi/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Full rules on Facebook &rarr;
               </a>
             </p>
@@ -264,19 +243,49 @@ export default function Home() {
       </section>
 
       {/* ======================================================================
-          BUILDABLE VS CONCEPTUAL
+          OUR DIFFERENCE
           ====================================================================== */}
       <section className="explain">
-        <div className="wrap explain-inner">
+        <div className="wrap center">
           <div className="eyebrow">Our Difference</div>
-          <h2>Buildable vs. Conceptual</h2>
-          <p style={{ marginTop: "16px" }}>
-            Some styles are realistic renovations your home could genuinely
-            support. Others are bold, imaginative reinterpretations —
-            beautiful, but not necessarily buildable exactly as shown. Most
-            tools won&apos;t tell you which is which. We label every one,
-            every time.
+          <h2>Curated. Honest. Reviewed.</h2>
+          <p className="explain-inner" style={{ marginTop: "16px" }}>
+            Most tools generate a pretty picture and stop there. Here&apos;s
+            what actually happens before anything reaches you.
           </p>
+
+          <div className="who-grid">
+            <div className="who-card">
+              <h3>Matched to Your Home &amp; Neighborhood</h3>
+              <p>
+                Every curated style is checked against your home&apos;s real
+                structure and climate, and against what&apos;s already built
+                around you — not just what looks good in a render.
+              </p>
+            </div>
+            <div className="who-card">
+              <h3>Buildable vs. Conceptual</h3>
+              <p>
+                Every style is honestly labeled as a realistic renovation
+                your home could genuinely support, or a bold reimagining
+                meant to inspire. We label every one, every time.
+              </p>
+            </div>
+            <div className="who-card">
+              <h3>A Person Reviews Every Result</h3>
+              <p>
+                Before anything reaches you, a real person checks it. The AI
+                does the rendering. A human stands behind what you receive.
+              </p>
+            </div>
+            <div className="who-card">
+              <h3>Know What&apos;s Structural</h3>
+              <p>
+                Want the specifics? For an added fee, we&apos;ll break down
+                exactly which changes are structural versus cosmetic.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -465,12 +474,16 @@ export default function Home() {
             <a
               href="https://www.facebook.com/share/p/1Dz3SZUTPi/"
               className="btn btn-gold"
+              target="_blank"
+              rel="noopener noreferrer"
             >
               Enter the Contest
             </a>
             <a
               href="https://www.facebook.com/RealPotentialVisuals"
               className="btn btn-outline"
+              target="_blank"
+              rel="noopener noreferrer"
             >
               Message Us
             </a>
@@ -487,7 +500,11 @@ export default function Home() {
           <div className="tagline">Human Curated. AI-Powered.</div>
           <div className="loc">Proudly serving the continental United States</div>
           <div className="flinks">
-            <a href="https://www.facebook.com/RealPotentialVisuals">
+            <a
+              href="https://www.facebook.com/RealPotentialVisuals"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               Facebook
             </a>
             {/* Add links here once these pages exist:
