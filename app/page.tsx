@@ -353,10 +353,6 @@ export default function Home() {
             <div className="price-box">
               <h3>Something Specific?</h3>
               <div className="price-line">
-                <span className="lbl">Custom Style</span>
-                <span className="amt">$59.99&ndash;$99.99</span>
-              </div>
-              <div className="price-line">
                 <span className="lbl">
                   Premium
                   <span className="sub">Roman villa, pagoda roof, etc.</span>
