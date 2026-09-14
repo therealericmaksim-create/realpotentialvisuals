@@ -7,6 +7,7 @@ interface __BaseEnv_CloudflareEnv {
 	ASSETS: Fetcher;
 	STRIPE_SECRET_KEY: string;
 	STRIPE_PUBLISHABLE_KEY: string;
+	STRIPE_WEBHOOK_SECRET?: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {

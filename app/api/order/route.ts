@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { computeOrderTotalCents } from "@/lib/orderPricing";
 
-// Persists the /start form into the orders/order_items tables. Prices are
-// currently trusted from the client (lib/pricing.ts constants) — recomputing
-// and verifying them server-side is a known TODO before this ever takes
-// real payment, same as the "never trust a client total" note elsewhere.
+// Persists the /start form into the orders/order_items tables. The total is
+// recomputed here from the submitted selections against lib/pricing.ts —
+// the client-submitted total is display-only and never trusted. /api/checkout
+// recomputes it again from the saved D1 rows before creating a Stripe
+// session, so this route being wrong could only ever misprice what gets
+// *saved*, never what gets *charged*.
 
 type StarterInput = {
   night: boolean;
@@ -43,6 +46,24 @@ export async function POST(req: NextRequest) {
   const orderId = crypto.randomUUID();
   const now = new Date().toISOString();
 
+  const totalCents = computeOrderTotalCents(
+    {
+      starter_night: body.starter?.night ? 1 : 0,
+      starter_seasonal: body.starter?.seasonal ? 1 : 0,
+      starter_holiday: body.starter?.holiday ? 1 : 0,
+      starter_breakdown: body.starter?.breakdown ? 1 : 0,
+      premium_enabled: body.premiumEnabled ? 1 : 0,
+      logo_key: body.logoSelected ? "pending-upload" : null,
+    },
+    (body.additionalStyles ?? []).map((style) => ({
+      style_name: style.styleName,
+      night: style.night ? 1 : 0,
+      seasonal: style.seasonal ? 1 : 0,
+      holiday: style.holiday ? 1 : 0,
+      breakdown: style.breakdown ? 1 : 0,
+    }))
+  );
+
   await env.DB.prepare(
     `INSERT INTO orders (
        id, status, photo_key, disclosure_accepted_at,
@@ -66,7 +87,7 @@ export async function POST(req: NextRequest) {
       // Logo isn't uploaded to R2 yet (no /api/logo-check exists) — only
       // whether one was selected is recorded, not a real file reference.
       body.logoSelected ? "pending-upload" : null,
-      Math.round((body.total ?? 0) * 100),
+      totalCents,
       now,
       now
     )

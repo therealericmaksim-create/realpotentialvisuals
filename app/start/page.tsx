@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
 import { STYLE_FAMILIES, slugifyStyleName } from "@/lib/styles";
 import { AI_DISCLOSURE_TEXT } from "@/lib/disclosure";
@@ -25,7 +26,14 @@ import {
 
 const EXTRA_KEYS: ExtraKey[] = ["night", "seasonal", "holiday"];
 
-type Step = "form" | "disclosure" | "order-check" | "daily-intake";
+type Step =
+  | "form"
+  | "disclosure"
+  | "order-check"
+  | "daily-intake"
+  | "checkout-error"
+  | "payment-success"
+  | "payment-cancelled";
 
 type AdditionalStyle = {
   id: string;
@@ -79,6 +87,16 @@ function StylePreview({ styleName }: { styleName: string }) {
 }
 
 export default function StartPage() {
+  return (
+    <Suspense fallback={null}>
+      <StartPageInner />
+    </Suspense>
+  );
+}
+
+function StartPageInner() {
+  const searchParams = useSearchParams();
+
   const [step, setStep] = useState<Step>("form");
   const [orderId, setOrderId] = useState<string | null>(null);
   const [orderStatus, setOrderStatus] = useState<string>("started");
@@ -87,6 +105,9 @@ export default function StartPage() {
     null
   );
   const [disclosureAccepted, setDisclosureAccepted] = useState(false);
+
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
 
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -362,6 +383,74 @@ export default function StartPage() {
     return () => clearTimeout(t);
   }, [step, orderId]);
 
+  async function startCheckout(id: string) {
+    setCheckoutError(null);
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: id }),
+      });
+      if (!res.ok) throw new Error("checkout failed");
+      const data = (await res.json()) as { url?: string };
+      if (!data.url) throw new Error("no checkout url");
+      window.location.href = data.url;
+    } catch {
+      setCheckoutError(
+        "Couldn't start checkout — check your connection and try again."
+      );
+      setStep("checkout-error");
+    }
+  }
+
+  // Daily-intake: real capacity/rate-limit checking isn't built yet (see
+  // pending work), so this just marks the order queued and moves straight
+  // to Stripe hosted Checkout for the full order total.
+  useEffect(() => {
+    if (step !== "daily-intake" || !orderId) return;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/order", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId, status: "queued" }),
+        });
+        const data = (await res.json()) as { status?: string };
+        setOrderStatus(data.status ?? "queued");
+      } finally {
+        startCheckout(orderId);
+      }
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [step, orderId]);
+
+  // Landing back from Stripe: ?checkout=success carries the Checkout Session
+  // id to confirm against Stripe/D1; ?checkout=cancelled just returns the
+  // customer to a retry screen. orderId is re-seeded from the URL since the
+  // redirect is a fresh page load with no client state.
+  useEffect(() => {
+    const checkout = searchParams.get("checkout");
+    const orderParam = searchParams.get("order");
+    const sessionId = searchParams.get("session_id");
+    if (!checkout || !orderParam) return;
+
+    setOrderId(orderParam);
+
+    if (checkout === "success" && sessionId) {
+      setStep("payment-success");
+      setConfirmingPayment(true);
+      fetch(`/api/checkout/confirm?session_id=${encodeURIComponent(sessionId)}`)
+        .then((res) => res.json() as Promise<{ paid?: boolean; status?: string }>)
+        .then((data) => {
+          setOrderStatus(data.status ?? (data.paid ? "placed" : "started"));
+        })
+        .catch(() => {})
+        .finally(() => setConfirmingPayment(false));
+    } else if (checkout === "cancelled") {
+      setStep("payment-cancelled");
+    }
+  }, [searchParams]);
+
   if (step === "disclosure") {
     return (
       <>
@@ -427,21 +516,92 @@ export default function StartPage() {
         <SiteHeader />
         <div className="flow-page">
           <div className="flow-wrap">
+            <div className="flow-spinner" />
             <h1>Checking Availability</h1>
             <p>
-              Seeing whether there&apos;s room to start today, or where
-              you&apos;d land in the queue.
+              Confirming there&apos;s room to start your order, then sending
+              you to secure checkout.
             </p>
-            <div className="flow-note">
-              Not built yet.
-              {orderId && (
-                <>
-                  <br />
-                  Order <code>{orderId}</code> — status:{" "}
-                  <code>{orderStatus}</code>
-                </>
-              )}
-            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (step === "checkout-error") {
+    return (
+      <>
+        <SiteHeader />
+        <div className="flow-page">
+          <div className="flow-wrap">
+            <h1>Checkout Couldn&apos;t Start</h1>
+            <p>{checkoutError ?? "Something went wrong starting checkout."}</p>
+            <button
+              type="button"
+              className="cfg-continue"
+              onClick={() => orderId && startCheckout(orderId)}
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (step === "payment-success") {
+    return (
+      <>
+        <SiteHeader />
+        <div className="flow-page">
+          <div className="flow-wrap">
+            {confirmingPayment ? (
+              <>
+                <div className="flow-spinner" />
+                <h1>Confirming Your Payment&hellip;</h1>
+                <p>One moment while we verify your payment with Stripe.</p>
+              </>
+            ) : (
+              <>
+                <h1>You&apos;re All Set!</h1>
+                <p>
+                  Your payment went through and your order is placed. We&apos;ll
+                  review your photo and start on your curated styles —
+                  typically 1–2 business days.
+                </p>
+                {orderId && (
+                  <div className="flow-note">
+                    Order <code>{orderId}</code> — status:{" "}
+                    <code>{orderStatus}</code>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (step === "payment-cancelled") {
+    return (
+      <>
+        <SiteHeader />
+        <div className="flow-page">
+          <div className="flow-wrap">
+            <h1>Checkout Cancelled</h1>
+            <p>
+              No charge was made. You can pick up right where you left off
+              whenever you&apos;re ready.
+            </p>
+            {checkoutError && <div className="cfg-error">{checkoutError}</div>}
+            <button
+              type="button"
+              className="cfg-continue"
+              onClick={() => orderId && startCheckout(orderId)}
+            >
+              Return to Checkout
+            </button>
           </div>
         </div>
       </>
@@ -852,7 +1012,7 @@ export default function StartPage() {
           </button>
           <div className="cfg-continue-note">
             {photoStatus === "valid"
-              ? "Next: the AI disclosure and an availability check — payment isn't wired up yet."
+              ? "Next: the AI disclosure, an availability check, then secure checkout."
               : "Upload and verify your photo above to continue."}
           </div>
         </div>
