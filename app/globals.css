@@ -272,9 +272,16 @@ header{
 /* ======================================================================
    BUILDABLE VS CONCEPTUAL
    ====================================================================== */
-.explain{ background: var(--bg-alt); }
-.explain-inner{ max-width: 700px; margin: 0 auto; text-align: center; }
-.explain-inner p{ color: var(--gray); font-size: 16px; }
+.explain{ background: var(--gold); }
+.explain .eyebrow{ color: #14161b; }
+.explain h2{ color: #14161b; }
+.explain-inner{
+  max-width: 700px; margin: 0 auto; text-align: center;
+  color: #4a3d15; font-size: 16px;
+}
+/* Difference cards keep their existing dark panel background regardless
+   of the section behind them, so their own gold/gray text stays exactly
+   as it was — no override needed here. */
 
 
 /* ======================================================================
@@ -355,6 +362,15 @@ header{
 /* ======================================================================
    FAQ
    ====================================================================== */
+#faq{
+  background: var(--white);
+  color: var(--bg);
+  /* Darker accent/muted tones scoped to this section only — the global
+     gold/gray were tuned for a dark backdrop and read too washed-out on
+     a light one. */
+  --gold: #96700e;
+  --gray: #5b5d5a;
+}
 .faq-item{ padding: 22px 0; border-top: 1px solid var(--line); }
 .faq-item:last-child{ border-bottom: 1px solid var(--line); }
 .faq-item h4{ font-size: 16px; margin-bottom: 8px; color: var(--gold); }
