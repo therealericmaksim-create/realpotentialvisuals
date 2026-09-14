@@ -3,6 +3,23 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.5.0 — 2026-09-14
+
+- Consolidated the intake flow (photo check, AI disclosure, order check,
+  daily intake check) into a single stateful `/start` page — no more
+  separate routes or query-param/session state threading.
+- Photo upload is now real: `/api/photo-check` validates file type by
+  magic bytes (not just extension) and stores accepted photos to R2;
+  the Continue button stays disabled until the upload is verified.
+- Orders are now persisted for real: `/api/order` writes to the `orders`
+  and `order_items` tables in D1 as the customer moves through the
+  flow, resolving each picked style against the `styles` table.
+- Added `lib/disclosure.ts` as the single source of truth for the
+  AI-disclosure copy shown across the flow.
+- Promo pricing: Starter is $79.99 (was $99, shown struck through),
+  Premium is $69.99 (was $129.99), Holiday Lighting is $29.99 (was
+  $39.99).
+
 ## v0.4.1 — 2026-09-14
 
 - FAQ section now has an ivory background (was transparent/dark), with
