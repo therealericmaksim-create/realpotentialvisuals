@@ -3,6 +3,25 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.7.0 — 2026-09-14
+
+- Property address, HOA, and historic-district questions added to
+  `/start` and stored on the order (Automation Routing Sheet Phase 1
+  step 1).
+- Gate 0/1: an OpenAI vision call screens each photo upload for
+  "is this a structure" and "is it residential" (steps 3-4), plus a
+  basic quality read. Fails open without `OPENAI_API_KEY` — skipped,
+  never blocking.
+- Daily intake cap (step 6): an atomic D1 reservation so concurrent
+  orders can't oversell the day. Reaching the cap changes the message,
+  not whether checkout proceeds.
+- Order confirmation email (step 8) via Resend, fired once payment is
+  verified. Fails open without `RESEND_API_KEY`.
+- Selecting a style in "Add Your Own Style" now shows its full
+  architectural description (fetched on demand) instead of an image
+  placeholder — all 133 styles now have one.
+- Reuploaded resized images in `public/images/`.
+
 ## v0.6.0 — 2026-09-14
 
 - Wired up Stripe hosted Checkout. `/start` now hands off to a real
