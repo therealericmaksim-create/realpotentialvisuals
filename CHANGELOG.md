@@ -3,6 +3,11 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.2.1 — 2026-09-14
+
+- Fixed the Facebook page link (footer + "Message Us" button) — the page
+  was renamed to facebook.com/RealPotentialVisuals.
+
 ## v0.2.0 — 2026-09-14
 
 - Ported the legacy static `index.html` prototype into the real Next.js app
