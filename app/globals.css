@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+/* Brand tokens — from the RealPotential Visuals project briefing (Section 12). */
+@theme {
+  --color-rpv-bg: #0b0c10;
+  --color-rpv-gold: #d4af37;
+  --color-rpv-ivory: #f5f3ee;
+  --font-heading: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background-color: var(--color-rpv-bg);
+  color: var(--color-rpv-ivory);
+  font-family: var(--font-body);
+}

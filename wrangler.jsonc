@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "realpotentialvisuals",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  // --- Storage bindings (Section 7 of the project briefing) ---
+  // Left commented out on purpose: connect these once real D1/R2/KV
+  // resources are created (`wrangler d1 create`, `wrangler r2 bucket create`,
+  // `wrangler kv namespace create`), then run `npm run cf-typegen`.
+  //
+  // "d1_databases": [
+  //   { "binding": "DB", "database_name": "realpotential", "database_id": "REPLACE_ME" }
+  // ],
+  // "r2_buckets": [
+  //   { "binding": "MEDIA", "bucket_name": "realpotential-media" }
+  // ],
+  // "kv_namespaces": [
+  //   { "binding": "SESSIONS", "id": "REPLACE_ME" }
+  // ],
+
+  "observability": {
+    "enabled": true
+  }
+}
