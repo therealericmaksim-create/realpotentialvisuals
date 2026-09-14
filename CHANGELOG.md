@@ -3,6 +3,12 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.2.3 — 2026-09-14
+
+- Wired up Stripe sandbox keys: `STRIPE_SECRET_KEY` as a Worker secret
+  (never committed), `STRIPE_PUBLISHABLE_KEY` as a plain public var. No
+  checkout code yet — this is just the credential plumbing.
+
 ## v0.2.2 — 2026-09-14
 
 - Added `og:url`, `og:site_name`, and explicit `og:image` width/height for
