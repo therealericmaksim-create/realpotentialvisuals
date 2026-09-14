@@ -3,6 +3,13 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.3.0 — 2026-09-14
+
+- Replaced the Believable/Conceptual two-tier "Add a Style" pricing with a
+  single flat $39.99 rate. Curated Starter styles keep full upfront
+  analysis; a customer-picked add-on style is now revealed as Buildable or
+  Conceptual at delivery instead of at selection. FAQ updated accordingly.
+
 ## v0.2.4 — 2026-09-14
 
 - Removed the Custom Style ($59.99–$99.99) pricing tier — business decision,
