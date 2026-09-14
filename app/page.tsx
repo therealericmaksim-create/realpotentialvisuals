@@ -1,15 +1,516 @@
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
-      <p className="font-[family-name:var(--font-heading)] text-sm tracking-[0.3em] text-[var(--color-rpv-gold)] uppercase">
-        Human Curated. AI-Powered.
-      </p>
-      <h1 className="font-[family-name:var(--font-heading)] text-4xl font-semibold sm:text-6xl">
-        RealPotential Visuals
-      </h1>
-      <p className="max-w-xl text-[var(--color-rpv-ivory)]/70">
-        AI-generated, human-curated exterior property visualizations. Site rebuild in progress.
-      </p>
-    </main>
+    <>
+      {/* ======================================================================
+          HEADER / NAV
+          Change the Facebook link in TWO places below (nav button + footer)
+          if your page URL ever changes.
+          ====================================================================== */}
+      <header>
+        <nav className="nav">
+          <a href="#" className="nav-logo">
+            <img src="/images/logo.png" alt="RealPotential Visuals" />
+          </a>
+
+          <input type="checkbox" id="nav-toggle" className="nav-toggle" />
+          <label htmlFor="nav-toggle" className="nav-burger">
+            &#9776;
+          </label>
+
+          <div className="nav-links">
+            <a href="#how">How It Works</a>
+            <a href="#gallery">Gallery</a>
+            <a href="#pricing">Pricing</a>
+            <a href="#contest">Contest</a>
+            <a href="#faq">FAQ</a>
+            <a
+              href="https://www.facebook.com/share/p/1Dz3SZUTPi/"
+              className="btn btn-gold"
+              style={{ padding: "10px 20px", fontSize: "13px" }}
+            >
+              Enter the Contest
+            </a>
+          </div>
+        </nav>
+      </header>
+
+      {/* ======================================================================
+          HERO
+          ====================================================================== */}
+      <section className="hero">
+        <div className="wrap">
+          <div className="eyebrow">RealPotential Visuals</div>
+          <h1>
+            See What Your Property
+            <br />
+            Could <span>Look Like</span>
+          </h1>
+          <p className="sub">
+            Before you renovate. Before you list it. Before you spend a
+            dollar. Human curated, AI-powered exterior visualizations — real
+            results, real fast.
+          </p>
+
+          <div className="btn-row center" style={{ justifyContent: "center" }}>
+            <a
+              href="https://www.facebook.com/share/p/1Dz3SZUTPi/"
+              className="btn btn-gold"
+            >
+              Enter Our Free Contest
+            </a>
+            <a href="#pricing" className="btn btn-outline">
+              See Pricing
+            </a>
+          </div>
+        </div>
+        <div className="scroll-cue">
+          <span>&#8595;</span>Scroll
+        </div>
+      </section>
+
+      {/* ======================================================================
+          REAL EXAMPLE  (the before/after that used to sit inside the hero)
+          ====================================================================== */}
+      <section>
+        <div className="wrap center">
+          <div className="eyebrow">See It In Action</div>
+          <h2>One Real Transformation</h2>
+
+          <div className="compare" style={{ marginTop: "44px" }}>
+            <div className="compare-img">
+              <img src="/images/original.jpg" alt="Current home exterior" />
+              <span className="compare-tag">Current</span>
+            </div>
+            <div className="compare-arrow">&#10148;</div>
+            <div className="compare-img">
+              <img
+                src="/images/hero.png"
+                alt="Potential home exterior visualization"
+              />
+              <span className="compare-tag">Potential</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ======================================================================
+          CONTEST
+          ====================================================================== */}
+      <section className="contest" id="contest">
+        <div className="wrap">
+          <div className="contest-box">
+            <div className="eyebrow">Limited Time</div>
+            <h2>
+              We&apos;re Giving Away a<span className="big">FREE Starter Package</span>
+            </h2>
+            <p className="value">
+              A $99 value — three professional exterior visualizations, in
+              styles our team hand-picks for your home.
+            </p>
+
+            <div className="steps">
+              <div className="step">
+                <span className="step-num">1</span>
+                <h4>Comment</h4>
+                <p>Your home&apos;s full address, on our contest post.</p>
+              </div>
+              <div className="step">
+                <span className="step-num">2</span>
+                <h4>Attach</h4>
+                <p>
+                  A clear daytime photo of the front exterior — whole house,
+                  straight-on, unobstructed.
+                </p>
+              </div>
+              <div className="step">
+                <span className="step-num">3</span>
+                <h4>Enter</h4>
+                <p>
+                  Our curators pick one property to feature. Winner announced
+                  ~October 1st.
+                </p>
+              </div>
+            </div>
+
+            <a
+              href="https://www.facebook.com/share/p/1Dz3SZUTPi/"
+              className="btn btn-gold"
+            >
+              Enter Now on Facebook
+            </a>
+
+            <p className="fine">
+              No purchase necessary. Open to residents of the continental
+              United States with Google Street View coverage, 18+.{" "}
+              <a href="https://www.facebook.com/share/p/1Dz3SZUTPi/">
+                Full rules on Facebook &rarr;
+              </a>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ======================================================================
+          HOW IT WORKS  (the normal paid service — separate from the contest)
+          ====================================================================== */}
+      <section id="how">
+        <div className="wrap center">
+          <div className="eyebrow">The Process</div>
+          <h2>How RealPotential Works</h2>
+
+          <div className="how-grid">
+            <div className="how-card">
+              <div className="how-num">01</div>
+              <h3>Send a Photo</h3>
+              <p>A clear daytime photo of your home&apos;s front exterior.</p>
+            </div>
+            <div className="how-card">
+              <div className="how-num">02</div>
+              <h3>We Curate</h3>
+              <p>
+                Our team reviews your home&apos;s structure and neighborhood,
+                then selects styles that genuinely fit.
+              </p>
+            </div>
+            <div className="how-card">
+              <div className="how-num">03</div>
+              <h3>You Choose</h3>
+              <p>Pick from your curated styles — or ask for something custom.</p>
+            </div>
+            <div className="how-card">
+              <div className="how-num">04</div>
+              <h3>We Deliver</h3>
+              <p>Professional visualizations, typically within 1–2 business days.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ======================================================================
+          THE MARK
+          ====================================================================== */}
+      <section className="mark">
+        <div className="wrap mark-inner">
+          <img src="/images/logo.png" alt="RealPotential mark" />
+          <p>
+            Every visualization is curated by a real person — someone who
+            looked at your home, chose styles that genuinely fit, and
+            reviewed the result before it reached you. The AI does the
+            rendering. A human does the judgment.
+          </p>
+          <div className="disclosure-box">
+            Every visualization is AI-generated and human-curated. Not an
+            actual photograph.
+          </div>
+        </div>
+      </section>
+
+      {/* ======================================================================
+          GALLERY
+          To swap a style: change the src= filename and the <h4> caption.
+          Change className="pill-buildable" to className="pill-conceptual"
+          (or back) to flip the little tag under any image.
+          ====================================================================== */}
+      <section id="gallery">
+        <div className="wrap center">
+          <div className="eyebrow">See the Range</div>
+          <h2>One House. Six Possibilities.</h2>
+
+          <div className="gallery-grid">
+            <div className="gallery-card">
+              <img src="/images/clean.png" alt="Classic Stone style" />
+              <div className="gallery-info">
+                <h4>Classic Stone</h4>
+                <span className="pill pill-buildable">Buildable</span>
+              </div>
+            </div>
+            <div className="gallery-card">
+              <img src="/images/warm.png" alt="Craftsman Warmth style" />
+              <div className="gallery-info">
+                <h4>Craftsman Warmth</h4>
+                <span className="pill pill-buildable">Buildable</span>
+              </div>
+            </div>
+            <div className="gallery-card">
+              <img src="/images/craftsman.png" alt="Tuscan Stone style" />
+              <div className="gallery-info">
+                <h4>Tuscan Stone</h4>
+                <span className="pill pill-conceptual">Conceptual</span>
+              </div>
+            </div>
+            <div className="gallery-card">
+              <img src="/images/wood.png" alt="Rustic Log Cabin style" />
+              <div className="gallery-info">
+                <h4>Rustic Log Cabin</h4>
+                <span className="pill pill-buildable">Buildable</span>
+              </div>
+            </div>
+            <div className="gallery-card">
+              <img src="/images/dark.png" alt="Modern Farmhouse style" />
+              <div className="gallery-info">
+                <h4>Modern Farmhouse</h4>
+                <span className="pill pill-buildable">Buildable</span>
+              </div>
+            </div>
+            <div className="gallery-card">
+              <img src="/images/evening.png" alt="Victorian Elegance style" />
+              <div className="gallery-info">
+                <h4>Victorian Elegance</h4>
+                <span className="pill pill-buildable">Buildable</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ======================================================================
+          BUILDABLE VS CONCEPTUAL
+          ====================================================================== */}
+      <section className="explain">
+        <div className="wrap explain-inner">
+          <div className="eyebrow">Our Difference</div>
+          <h2>Buildable vs. Conceptual</h2>
+          <p style={{ marginTop: "16px" }}>
+            Some styles are realistic renovations your home could genuinely
+            support. Others are bold, imaginative reinterpretations —
+            beautiful, but not necessarily buildable exactly as shown. Most
+            tools won&apos;t tell you which is which. We label every one,
+            every time.
+          </p>
+        </div>
+      </section>
+
+      {/* ======================================================================
+          WHO IT'S FOR
+          ====================================================================== */}
+      <section id="who">
+        <div className="wrap center">
+          <div className="eyebrow">Built For</div>
+          <h2>Who This Is For</h2>
+
+          <div className="who-grid">
+            <div className="who-card">
+              <h3>Homeowners &amp; FSBO Sellers</h3>
+              <p>
+                See your home&apos;s potential before you spend a dollar, or
+                make your listing stand out without an agent&apos;s budget.
+              </p>
+            </div>
+            <div className="who-card">
+              <h3>Real Estate Agents</h3>
+              <p>A pre-listing marketing tool that helps a home sell faster.</p>
+            </div>
+            <div className="who-card">
+              <h3>Contractors</h3>
+              <p>A closing tool for your next bid, rendered in your own materials.</p>
+            </div>
+            <div className="who-card">
+              <h3>Investors &amp; Flippers</h3>
+              <p>Evaluate a property&apos;s potential before you buy it.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ======================================================================
+          PRICING
+          ====================================================================== */}
+      <section id="pricing">
+        <div className="wrap">
+          <div className="center">
+            <div className="eyebrow">Simple Pricing</div>
+            <h2>Packages &amp; Add-Ons</h2>
+          </div>
+
+          <div className="pricing-top">
+            <div className="price-box featured">
+              <h3>Starter</h3>
+              <div className="big-price">$99</div>
+              <p className="desc">
+                3 professional visualizations, in styles our team hand-picks
+                for your specific home and neighborhood.
+              </p>
+            </div>
+
+            <div className="price-box">
+              <h3>Add a Style</h3>
+              <div className="price-line">
+                <span className="lbl">
+                  Believable
+                  <span className="sub">a realistic renovation</span>
+                </span>
+                <span className="amt">$39.99</span>
+              </div>
+              <div className="price-line">
+                <span className="lbl">
+                  Conceptual
+                  <span className="sub">a bold reimagining</span>
+                </span>
+                <span className="amt">$79.99</span>
+              </div>
+            </div>
+
+            <div className="price-box">
+              <h3>Something Specific?</h3>
+              <div className="price-line">
+                <span className="lbl">Custom Style</span>
+                <span className="amt">$59.99&ndash;$99.99</span>
+              </div>
+              <div className="price-line">
+                <span className="lbl">
+                  Premium
+                  <span className="sub">Roman villa, pagoda roof, etc.</span>
+                </span>
+                <span className="amt">$129.99</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="extras-row">
+            <h3>Extras</h3>
+            <div className="extras-grid">
+              <div className="extra-item">
+                <span className="lbl">Night View</span>
+                <span className="amt">$29.99</span>
+              </div>
+              <div className="extra-item">
+                <span className="lbl">Seasonal Look</span>
+                <span className="amt">$29.99</span>
+              </div>
+              <div className="extra-item">
+                <span className="lbl">Holiday Lighting</span>
+                <span className="amt">$39.99</span>
+              </div>
+              <div className="extra-item">
+                <span className="lbl">Extra Revision</span>
+                <span className="amt">$24.99</span>
+              </div>
+              <div className="extra-item">
+                <span className="lbl">Add Your Logo</span>
+                <span className="amt">$29.99</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="badges-row">
+            <div className="badge">
+              <b>Human Curated</b>A real person picks the styles and reviews
+              every result before delivery.
+            </div>
+            <div className="badge">
+              <b>1&ndash;2 Business Days</b>Timing can shift during busy
+              periods — we&apos;ll always tell you where you stand.
+            </div>
+            <div className="badge">
+              <b>Not an Actual Photo</b>Every visualization is AI-generated
+              and intended to show potential.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ======================================================================
+          FAQ
+          ====================================================================== */}
+      <section id="faq">
+        <div className="wrap">
+          <div className="center">
+            <div className="eyebrow">Questions</div>
+            <h2>Frequently Asked</h2>
+          </div>
+
+          <div style={{ maxWidth: "700px", margin: "40px auto 0" }}>
+            <div className="faq-item">
+              <h4>Is this a real photo of my house?</h4>
+              <p>
+                No. Every visualization is AI-generated and reviewed by our
+                team before delivery. It&apos;s a concept, not a photograph.
+              </p>
+            </div>
+            <div className="faq-item">
+              <h4>How long does it take?</h4>
+              <p>
+                Typically 1&ndash;2 business days. During busy periods it may
+                take a little longer &mdash; we&apos;ll always tell you where
+                you stand in the queue.
+              </p>
+            </div>
+            <div className="faq-item">
+              <h4>What if I don&apos;t love the result?</h4>
+              <p>
+                Every visualization includes one revision. Additional
+                revisions are available.
+              </p>
+            </div>
+            <div className="faq-item">
+              <h4>What&apos;s the difference between Buildable and Conceptual?</h4>
+              <p>
+                Buildable styles are realistic renovations your home could
+                genuinely support. Conceptual styles are bold reimaginings
+                meant to inspire &mdash; not necessarily to build exactly as
+                shown. We label every style honestly.
+              </p>
+            </div>
+            <div className="faq-item">
+              <h4>Do you serve my area?</h4>
+              <p>
+                We serve homeowners, agents, and contractors across the
+                continental United States.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ======================================================================
+          FINAL CTA
+          ====================================================================== */}
+      <section className="final-cta">
+        <div className="wrap">
+          <h2>See Your Home&apos;s Potential</h2>
+          <p>Enter our free contest, or message us directly on Facebook to get started.</p>
+          <div className="btn-row center" style={{ justifyContent: "center" }}>
+            <a
+              href="https://www.facebook.com/share/p/1Dz3SZUTPi/"
+              className="btn btn-gold"
+            >
+              Enter the Contest
+            </a>
+            <a
+              href="https://www.facebook.com/RealPotentialPropertyVisuals"
+              className="btn btn-outline"
+            >
+              Message Us
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ======================================================================
+          FOOTER
+          ====================================================================== */}
+      <footer>
+        <div className="wrap">
+          <img src="/images/logo.png" alt="RealPotential Visuals" />
+          <div className="tagline">Human Curated. AI-Powered.</div>
+          <div className="loc">Proudly serving the continental United States</div>
+          <div className="flinks">
+            <a href="https://www.facebook.com/RealPotentialPropertyVisuals">
+              Facebook
+            </a>
+            {/* Add links here once these pages exist:
+            <a href="/terms">Terms</a>
+            <a href="/license">License</a>
+            */}
+          </div>
+          <div className="legal">
+            &copy; 2026 RealPotential Visuals. All rights reserved.
+            <br />
+            Every visualization is AI-generated and human-curated. Not an
+            actual photograph.
+          </div>
+        </div>
+      </footer>
+    </>
   );
 }
