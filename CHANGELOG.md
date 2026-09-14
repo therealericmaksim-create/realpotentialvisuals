@@ -3,6 +3,14 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.2.0 — 2026-09-14
+
+- Ported the legacy static `index.html` prototype into the real Next.js app
+  (`app/page.tsx` + `app/globals.css`), replacing the placeholder homepage.
+- Fonts switched from a Google Fonts `<link>` to `next/font/google`
+  (Poppins + Inter) for better performance.
+- Images moved to `public/images/`. Removed the now-superseded `index.html`.
+
 ## v0.1.1 — 2026-09-13
 
 - First live deploy: `npm run deploy` (OpenNext build + `wrangler deploy`)
