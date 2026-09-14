@@ -477,7 +477,7 @@ export default function Home() {
               Enter the Contest
             </a>
             <a
-              href="https://www.facebook.com/RealPotentialPropertyVisuals"
+              href="https://www.facebook.com/RealPotentialVisuals"
               className="btn btn-outline"
             >
               Message Us
@@ -495,7 +495,7 @@ export default function Home() {
           <div className="tagline">Human Curated. AI-Powered.</div>
           <div className="loc">Proudly serving the continental United States</div>
           <div className="flinks">
-            <a href="https://www.facebook.com/RealPotentialPropertyVisuals">
+            <a href="https://www.facebook.com/RealPotentialVisuals">
               Facebook
             </a>
             {/* Add links here once these pages exist:
