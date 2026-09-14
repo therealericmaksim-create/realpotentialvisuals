@@ -3,6 +3,25 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.6.0 — 2026-09-14
+
+- Wired up Stripe hosted Checkout. `/start` now hands off to a real
+  Checkout Session once availability is confirmed, instead of stopping
+  at "Not built yet".
+- Order totals are recomputed server-side from the saved order's own
+  D1 row before a Checkout Session is created — the client-submitted
+  total is never trusted for what gets charged.
+- Payment is finalized two independent ways: the Stripe success
+  redirect (`/api/checkout/confirm`) and a webhook
+  (`/api/stripe/webhook`), so an order still gets marked paid even if
+  the customer never makes it back to the site. The webhook needs
+  `STRIPE_WEBHOOK_SECRET` set once a webhook endpoint exists in the
+  Stripe Dashboard.
+- Added success and cancelled screens to the `/start` flow for the
+  return trip from Stripe.
+- Verified end-to-end against the Stripe test/sandbox account with a
+  real test-card payment.
+
 ## v0.5.0 — 2026-09-14
 
 - Consolidated the intake flow (photo check, AI disclosure, order check,
