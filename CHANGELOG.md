@@ -3,6 +3,11 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.2.2 — 2026-09-14
+
+- Added `og:url`, `og:site_name`, and explicit `og:image` width/height for
+  more reliable Facebook/Messenger link previews.
+
 ## v0.2.1 — 2026-09-14
 
 - Fixed the Facebook page link (footer + "Message Us" button) — the page
