@@ -3,6 +3,13 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.1.1 — 2026-09-13
+
+- First live deploy: `npm run deploy` (OpenNext build + `wrangler deploy`)
+  published the Worker to Cloudflare.
+- Attached `realpotentialvisuals.com` and `www.realpotentialvisuals.com` as
+  custom domains in `wrangler.jsonc` — site is live at the real domain.
+
 ## v0.1.0 — 2026-09-13
 
 - Next.js 15 scaffold (App Router, TypeScript, Tailwind v4), deploying to
