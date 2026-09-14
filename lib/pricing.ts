@@ -2,9 +2,12 @@
 // (eventually) the server-side Stripe line-item calculation — never trust
 // a client-submitted total, this file is what the server re-derives too.
 
-export const STARTER_PRICE = 99;
+// Running a promo — STARTER_ORIGINAL_PRICE is shown struck through,
+// STARTER_PRICE is the real, charged price.
+export const STARTER_ORIGINAL_PRICE = 99;
+export const STARTER_PRICE = 79.99;
 export const ADD_STYLE_PRICE = 39.99;
-export const PREMIUM_PRICE = 129.99;
+export const PREMIUM_PRICE = 69.99;
 export const LOGO_PRICE = 29.99;
 export const PREMIUM_CHAR_LIMIT = 550;
 
@@ -26,7 +29,7 @@ export const EXTRA_LABELS: Record<ExtraKey, string> = {
 export const EXTRA_BASE_PRICE: Record<ExtraKey, number> = {
   night: 29.99,
   seasonal: 29.99,
-  holiday: 39.99,
+  holiday: 29.99,
 };
 
 // Selected now, applies to all 3 Starter renders before the customer has
@@ -37,14 +40,14 @@ export const EXTRA_BASE_PRICE: Record<ExtraKey, number> = {
 export const EXTRA_STARTER_BUNDLE_PRICE: Record<ExtraKey, number> = {
   night: 67.48,
   seasonal: 67.48,
-  holiday: 89.98,
+  holiday: 67.48,
 };
 
 // Attached to one additional (customer-picked) style — 25% off base.
 export const EXTRA_ADDITIONAL_STYLE_PRICE: Record<ExtraKey, number> = {
   night: 22.49,
   seasonal: 22.49,
-  holiday: 29.99,
+  holiday: 22.49,
 };
 
 export type SeasonOption = {

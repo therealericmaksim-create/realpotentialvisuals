@@ -3,8 +3,10 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import SiteHeader from "@/components/SiteHeader";
 import { STYLE_FAMILIES, slugifyStyleName } from "@/lib/styles";
+import { AI_DISCLOSURE_TEXT } from "@/lib/disclosure";
 import {
   STARTER_PRICE,
+  STARTER_ORIGINAL_PRICE,
   ADD_STYLE_PRICE,
   PREMIUM_PRICE,
   LOGO_PRICE,
@@ -22,6 +24,8 @@ import {
 } from "@/lib/pricing";
 
 const EXTRA_KEYS: ExtraKey[] = ["night", "seasonal", "holiday"];
+
+type Step = "form" | "disclosure" | "order-check" | "daily-intake";
 
 type AdditionalStyle = {
   id: string;
@@ -75,9 +79,22 @@ function StylePreview({ styleName }: { styleName: string }) {
 }
 
 export default function StartPage() {
+  const [step, setStep] = useState<Step>("form");
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderStatus, setOrderStatus] = useState<string>("started");
+  const [creatingOrder, setCreatingOrder] = useState(false);
+  const [orderCreateError, setOrderCreateError] = useState<string | null>(
+    null
+  );
+  const [disclosureAccepted, setDisclosureAccepted] = useState(false);
+
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoStatus, setPhotoStatus] = useState<
+    "idle" | "checking" | "valid" | "invalid"
+  >("idle");
+  const [photoKey, setPhotoKey] = useState<string | null>(null);
 
   const [starterExtras, setStarterExtras] =
     useState<Record<ExtraKey, boolean>>(emptyExtras());
@@ -98,19 +115,49 @@ export default function StartPage() {
 
   const premiumCharCount = premiumText.length;
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
-    if (file && file.size > HOUSE_PHOTO_MAX_MB * 1024 * 1024) {
+    if (!file) return;
+
+    if (file.size > HOUSE_PHOTO_MAX_MB * 1024 * 1024) {
       setPhotoError(
         `That file is too large (max ${HOUSE_PHOTO_MAX_MB}MB). Please choose a smaller photo.`
       );
       e.target.value = "";
       return;
     }
+
     setPhotoError(null);
     setPhoto(file);
+    setPhotoKey(null);
+    setPhotoStatus("checking");
     if (photoPreview) URL.revokeObjectURL(photoPreview);
-    setPhotoPreview(file ? URL.createObjectURL(file) : null);
+    setPhotoPreview(URL.createObjectURL(file));
+
+    try {
+      const formData = new FormData();
+      formData.append("photo", file);
+      const res = await fetch("/api/photo-check", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await res.json()) as {
+        valid: boolean;
+        key?: string;
+        reason?: string;
+      };
+
+      if (data.valid && data.key) {
+        setPhotoStatus("valid");
+        setPhotoKey(data.key);
+      } else {
+        setPhotoStatus("invalid");
+        setPhotoError(data.reason ?? "That photo couldn't be verified.");
+      }
+    } catch {
+      setPhotoStatus("invalid");
+      setPhotoError("Upload failed — check your connection and try again.");
+    }
   }
 
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -236,6 +283,171 @@ export default function StartPage() {
 
   const total = lineItems.reduce((sum, i) => sum + i.amount, 0);
 
+  async function handleContinueFromForm() {
+    setCreatingOrder(true);
+    setOrderCreateError(null);
+    try {
+      const payload = {
+        photoKey,
+        starter: {
+          night: starterExtras.night,
+          seasonal: starterExtras.seasonal,
+          seasonChoice: starterSeasonChoice,
+          holiday: starterExtras.holiday,
+          holidayChoice: starterHolidayChoice,
+          breakdown: starterBreakdown,
+        },
+        additionalStyles: additionalStyles.map((row) => ({
+          styleName: row.styleName,
+          night: row.extras.night,
+          seasonal: row.extras.seasonal,
+          seasonChoice: row.seasonChoice,
+          holiday: row.extras.holiday,
+          holidayChoice: row.holidayChoice,
+          breakdown: row.breakdown,
+          unitPrice: ADD_STYLE_PRICE,
+        })),
+        premiumEnabled,
+        premiumText,
+        logoSelected: !!logo,
+        total,
+      };
+      const res = await fetch("/api/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("failed");
+      const data = (await res.json()) as { orderId: string; status: string };
+      setOrderId(data.orderId);
+      setOrderStatus(data.status);
+      setStep("disclosure");
+    } catch {
+      setOrderCreateError(
+        "Could not save your order — check your connection and try again."
+      );
+    } finally {
+      setCreatingOrder(false);
+    }
+  }
+
+  async function handleAcceptDisclosure() {
+    if (!orderId) return;
+    await fetch("/api/order", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId, acceptDisclosure: true }),
+    });
+    setStep("order-check");
+  }
+
+  // Order-check: placeholder final review — marks the order verified, then
+  // moves on. Real review logic (Gate 0/1 results, feasibility, etc.) goes
+  // here once it exists.
+  useEffect(() => {
+    if (step !== "order-check" || !orderId) return;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/order", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId, status: "verified" }),
+        });
+        const data = (await res.json()) as { status?: string };
+        setOrderStatus(data.status ?? "verified");
+      } finally {
+        setStep("daily-intake");
+      }
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [step, orderId]);
+
+  if (step === "disclosure") {
+    return (
+      <>
+        <SiteHeader />
+        <div className="flow-page">
+          <div className="flow-wrap">
+            <div className="eyebrow">Before You Continue</div>
+            <h1>The AI Disclosure</h1>
+            <p>
+              Please read this in full — it explains exactly what these
+              visualizations are, and aren&apos;t.
+            </p>
+
+            <div className="disclosure-card">
+              <p>{AI_DISCLOSURE_TEXT}</p>
+
+              <div className="disclosure-check">
+                <input
+                  type="checkbox"
+                  id="disclosure-accept"
+                  checked={disclosureAccepted}
+                  onChange={() => setDisclosureAccepted((v) => !v)}
+                />
+                <label htmlFor="disclosure-accept">
+                  I have read, understood, and accept this disclosure.
+                </label>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="cfg-continue"
+              disabled={!disclosureAccepted}
+              onClick={handleAcceptDisclosure}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (step === "order-check") {
+    return (
+      <>
+        <SiteHeader />
+        <div className="flow-page">
+          <div className="flow-wrap">
+            <div className="flow-spinner" />
+            <h1>Order Check</h1>
+            <p>This is where your order gets a final review before payment.</p>
+            <div className="flow-note">Not built yet.</div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (step === "daily-intake") {
+    return (
+      <>
+        <SiteHeader />
+        <div className="flow-page">
+          <div className="flow-wrap">
+            <h1>Checking Availability</h1>
+            <p>
+              Seeing whether there&apos;s room to start today, or where
+              you&apos;d land in the queue.
+            </p>
+            <div className="flow-note">
+              Not built yet.
+              {orderId && (
+                <>
+                  <br />
+                  Order <code>{orderId}</code> — status:{" "}
+                  <code>{orderStatus}</code>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <SiteHeader />
@@ -281,6 +493,17 @@ export default function StartPage() {
                 <div className="cfg-filename">
                   {photo?.name} ({photo && formatFileSize(photo.size)})
                 </div>
+                {photoStatus === "checking" && (
+                  <div className="cfg-photo-status cfg-photo-checking">
+                    <span className="cfg-mini-spinner" />
+                    Uploading and verifying&hellip;
+                  </div>
+                )}
+                {photoStatus === "valid" && (
+                  <div className="cfg-photo-status cfg-photo-valid">
+                    ✓ Photo verified
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -296,7 +519,10 @@ export default function StartPage() {
               }}
             >
               <h2 style={{ marginBottom: 0 }}>Starter Package</h2>
-              <span className="cfg-included">Included — {money(STARTER_PRICE)}</span>
+              <span className="cfg-included">
+                Included — <span className="cfg-price-was">{money(STARTER_ORIGINAL_PRICE)}</span>{" "}
+                {money(STARTER_PRICE)}
+              </span>
             </div>
             <p className="cfg-sub">
               3 professional visualizations, in styles our team hand-picks
@@ -612,12 +838,22 @@ export default function StartPage() {
             <span>{money(total)}</span>
           </div>
 
-          <button type="button" className="cfg-continue" disabled>
-            Continue to Payment
+          {orderCreateError && (
+            <div className="cfg-error">{orderCreateError}</div>
+          )}
+
+          <button
+            type="button"
+            className="cfg-continue"
+            disabled={photoStatus !== "valid" || creatingOrder}
+            onClick={handleContinueFromForm}
+          >
+            {creatingOrder ? "Saving Your Order…" : "Continue"}
           </button>
           <div className="cfg-continue-note">
-            Checkout isn&apos;t wired up yet — this is a preview of the order
-            builder only.
+            {photoStatus === "valid"
+              ? "Next: the AI disclosure and an availability check — payment isn't wired up yet."
+              : "Upload and verify your photo above to continue."}
           </div>
         </div>
       </div>

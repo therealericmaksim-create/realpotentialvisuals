@@ -20,16 +20,14 @@
   },
 
   // --- Storage bindings (Section 7 of the project briefing) ---
-  // R2/KV still commented out — connect those once real resources exist
-  // (`wrangler r2 bucket create`, `wrangler kv namespace create`), then
-  // run `npm run cf-typegen`.
+  // KV still commented out — connect once a real namespace exists
+  // (`wrangler kv namespace create`), then run `npm run cf-typegen`.
   "d1_databases": [
     { "binding": "DB", "database_name": "realpotential", "database_id": "806c40bb-cebc-49e5-b61e-2d7d736ad19f" }
   ],
-  //
-  // "r2_buckets": [
-  //   { "binding": "MEDIA", "bucket_name": "realpotential-media" }
-  // ],
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "realpotential-media" }
+  ],
   // "kv_namespaces": [
   //   { "binding": "SESSIONS", "id": "REPLACE_ME" }
   // ],

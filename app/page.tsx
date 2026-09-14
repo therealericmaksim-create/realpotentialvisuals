@@ -334,7 +334,9 @@ export default function Home() {
           <div className="pricing-top">
             <div className="price-box featured">
               <h3>Starter</h3>
-              <div className="big-price">$99</div>
+              <div className="big-price">
+                <span className="price-was">$99</span> $79.99
+              </div>
               <p className="desc">
                 3 professional visualizations, in styles our team hand-picks
                 for your specific home and neighborhood.
@@ -359,7 +361,7 @@ export default function Home() {
                   Premium
                   <span className="sub">Roman villa, pagoda roof, etc.</span>
                 </span>
-                <span className="amt">$129.99</span>
+                <span className="amt">$69.99</span>
               </div>
             </div>
           </div>
@@ -377,7 +379,7 @@ export default function Home() {
               </div>
               <div className="extra-item">
                 <span className="lbl">Holiday Lighting</span>
-                <span className="amt">$39.99</span>
+                <span className="amt">$29.99</span>
               </div>
               <div className="extra-item">
                 <span className="lbl">Extra Revision</span>

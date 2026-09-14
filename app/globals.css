@@ -320,6 +320,10 @@ header{
   margin-bottom: 14px;
 }
 .price-box .big-price{ font-size: 32px; font-weight: 800; margin-bottom: 10px; }
+.price-box .big-price .price-was{
+  font-size: 19px; font-weight: 600; color: var(--gray);
+  text-decoration: line-through; margin-right: 8px;
+}
 .price-box p.desc{ font-size: 14px; color: var(--gray); margin-bottom: 16px; }
 .price-line{
   display: flex; justify-content: space-between; align-items: baseline;
@@ -450,6 +454,9 @@ footer .legal{ font-size: 12px; color: #6f6f6b; max-width: 600px; margin: 0 auto
   letter-spacing: .06em; text-transform: uppercase; color: var(--gold);
   border: 1px solid var(--gold); border-radius: 20px; padding: 4px 10px;
 }
+.cfg-included .cfg-price-was{
+  text-decoration: line-through; opacity: .6; font-weight: 500;
+}
 
 /* checkbox rows for extras */
 .cfg-extra{
@@ -557,6 +564,48 @@ footer .legal{ font-size: 12px; color: #6f6f6b; max-width: 600px; margin: 0 auto
 .cfg-continue{
   width: 100%; margin-top: 18px; padding: 14px; border-radius: 4px;
   background: var(--gold); color: #14161b; font-family: var(--font-head);
-  font-weight: 700; font-size: 14px; border: none; cursor: not-allowed; opacity: .6;
+  font-weight: 700; font-size: 14px; border: none; cursor: pointer;
+  display: block; text-align: center; text-decoration: none;
+  transition: background .15s ease, opacity .15s ease;
 }
+.cfg-continue:hover{ background: var(--gold-soft); }
+.cfg-continue:disabled{ cursor: not-allowed; opacity: .5; }
+.cfg-continue:disabled:hover{ background: var(--gold); }
 .cfg-continue-note{ font-size: 11.5px; color: var(--gray); text-align: center; margin-top: 8px; }
+
+
+/* ======================================================================
+   FLOW PAGES  (/photo-check, /ai-disclosure, /daily-intake-check,
+   /order-check) — the intake steps between the order builder and payment.
+   ====================================================================== */
+.flow-page{ padding: 60px 24px 100px; min-height: 60vh; }
+.flow-wrap{ max-width: 640px; margin: 0 auto; text-align: center; }
+
+/* auto-redirect placeholder pages */
+.flow-spinner{
+  width: 34px; height: 34px; margin: 0 auto 22px;
+  border: 3px solid var(--line); border-top-color: var(--gold);
+  border-radius: 50%; animation: flowSpin 0.9s linear infinite;
+}
+@keyframes flowSpin{ to{ transform: rotate(360deg); } }
+.flow-page h1{ font-size: 24px; margin-bottom: 10px; }
+.flow-page p{ color: var(--gray); font-size: 15px; }
+.flow-note{
+  margin-top: 28px; font-size: 12.5px; color: var(--gray);
+  border-top: 1px solid var(--line); padding-top: 16px;
+}
+
+/* disclosure page */
+.disclosure-card{
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 28px; text-align: left; margin-top: 28px;
+}
+.disclosure-card p{ color: var(--white); font-size: 15px; line-height: 1.65; }
+.disclosure-check{
+  display: flex; align-items: flex-start; gap: 12px;
+  margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--line);
+}
+.disclosure-check input[type="checkbox"]{
+  margin-top: 3px; width: 18px; height: 18px; accent-color: var(--gold); flex-shrink: 0;
+}
+.disclosure-check label{ font-size: 14px; color: var(--gray); text-align: left; cursor: pointer; }
