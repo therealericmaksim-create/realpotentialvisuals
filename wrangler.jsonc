@@ -10,7 +10,11 @@
   },
   "routes": [
     { "pattern": "realpotentialvisuals.com", "custom_domain": true },
-    { "pattern": "www.realpotentialvisuals.com", "custom_domain": true }
+    { "pattern": "www.realpotentialvisuals.com", "custom_domain": true },
+    // Admin backend, same Worker/app — gated by Cloudflare Access (Zero
+    // Trust), not app-level auth. See middleware.ts for the hostname
+    // routing into app/admin/*.
+    { "pattern": "admin.realpotentialvisuals.com", "custom_domain": true }
   ],
 
   // Publishable keys are designed to be public — safe to commit.
