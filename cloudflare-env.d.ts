@@ -11,6 +11,7 @@ interface __BaseEnv_CloudflareEnv {
 	DAILY_INTAKE_CAP: string;
 	OPENAI_API_KEY: string;
 	RESEND_API_KEY?: string;
+	GOOGLE_MAPS_API_KEY?: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {

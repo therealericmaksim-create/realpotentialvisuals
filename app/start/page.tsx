@@ -3,6 +3,7 @@
 import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { STYLE_FAMILIES } from "@/lib/styles";
 import { AI_DISCLOSURE_TEXT } from "@/lib/disclosure";
 import {
@@ -722,13 +723,9 @@ function StartPageInner() {
               Helps us check zoning, historic-overlay, and feasibility
               questions before we start.
             </p>
-            <input
-              type="text"
-              className="cfg-sub-select"
-              style={{ marginBottom: "12px" }}
-              placeholder="Property address"
+            <AddressAutocomplete
               value={propertyAddress}
-              onChange={(e) => setPropertyAddress(e.target.value)}
+              onChange={setPropertyAddress}
             />
             <select
               className="cfg-sub-select"
