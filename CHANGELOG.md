@@ -3,6 +3,11 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.2.4 — 2026-09-14
+
+- Removed the Custom Style ($59.99–$99.99) pricing tier — business decision,
+  see project notes. Premium ($129.99) is unaffected.
+
 ## v0.2.3 — 2026-09-14
 
 - Wired up Stripe sandbox keys: `STRIPE_SECRET_KEY` as a Worker secret
