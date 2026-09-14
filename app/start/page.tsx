@@ -689,7 +689,7 @@ function StartPageInner() {
                 {photo ? "Choose a Different Photo" : "Click to Upload a Photo"}
               </div>
               <div className="cfg-drop-hint">
-                JPG or PNG, front exterior only — max {HOUSE_PHOTO_MAX_MB}MB
+                JPG, PNG, or WEBP, front exterior only — max {HOUSE_PHOTO_MAX_MB}MB
               </div>
             </label>
             {photoError && <div className="cfg-error">{photoError}</div>}

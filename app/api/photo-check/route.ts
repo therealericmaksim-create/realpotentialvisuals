@@ -10,16 +10,38 @@ import { checkGatePhoto } from "@/lib/openai";
 
 const MAX_BYTES = 15 * 1024 * 1024;
 
-const MAGIC_BYTES: { mime: string; ext: string; bytes: number[] }[] = [
-  { mime: "image/jpeg", ext: "jpg", bytes: [0xff, 0xd8, 0xff] },
-  { mime: "image/png", ext: "png", bytes: [0x89, 0x50, 0x4e, 0x47] },
+function bytesAt(buf: Uint8Array, offset: number, bytes: number[]): boolean {
+  return bytes.every((b, i) => buf[offset + i] === b);
+}
+
+const IMAGE_TYPES: {
+  mime: string;
+  ext: string;
+  matches: (buf: Uint8Array) => boolean;
+}[] = [
+  {
+    mime: "image/jpeg",
+    ext: "jpg",
+    matches: (buf) => bytesAt(buf, 0, [0xff, 0xd8, 0xff]),
+  },
+  {
+    mime: "image/png",
+    ext: "png",
+    matches: (buf) => bytesAt(buf, 0, [0x89, 0x50, 0x4e, 0x47]),
+  },
+  {
+    // WEBP's magic bytes aren't contiguous: "RIFF" at byte 0, then a
+    // 4-byte little-endian file size, then "WEBP" at byte 8.
+    mime: "image/webp",
+    ext: "webp",
+    matches: (buf) =>
+      bytesAt(buf, 0, [0x52, 0x49, 0x46, 0x46]) &&
+      bytesAt(buf, 8, [0x57, 0x45, 0x42, 0x50]),
+  },
 ];
 
 function detectImageType(buf: Uint8Array) {
-  for (const candidate of MAGIC_BYTES) {
-    if (candidate.bytes.every((b, i) => buf[i] === b)) return candidate;
-  }
-  return null;
+  return IMAGE_TYPES.find((candidate) => candidate.matches(buf)) ?? null;
 }
 
 type EnvWithMedia = CloudflareEnv & { MEDIA?: R2Bucket };
@@ -49,7 +71,7 @@ export async function POST(req: NextRequest) {
   if (!detected) {
     return NextResponse.json({
       valid: false,
-      reason: "That doesn't look like a valid JPG or PNG file.",
+      reason: "That doesn't look like a valid JPG, PNG, or WEBP file.",
     });
   }
 
