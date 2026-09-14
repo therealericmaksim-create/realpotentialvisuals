@@ -39,7 +39,7 @@ export async function checkGatePhoto(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: "gpt-5.6-luna",
       messages: [
         {
           role: "system",
@@ -79,7 +79,10 @@ export async function checkGatePhoto(
           },
         },
       },
-      max_tokens: 200,
+      // This model reasons before answering (see usage.reasoning_tokens in
+      // a raw response) and needs max_completion_tokens, not max_tokens —
+      // budget generously so reasoning can't crowd out the actual answer.
+      max_completion_tokens: 500,
     }),
   });
 
