@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Pins the workspace root to this project, since a stray lockfile in
+  // the user's home directory otherwise confuses Next's auto-detection.
+  outputFileTracingRoot: import.meta.dirname,
   images: {
     // R2 will serve originals/renders once the bucket is connected (see wrangler.jsonc).
     remotePatterns: [],
