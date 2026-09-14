@@ -3,6 +3,25 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.4.0 — 2026-09-14
+
+- Added `/start`, the order configurator: photo upload, Starter package,
+  free-pick additional styles from all 133 (categorized dropdown, with a
+  per-style example-image placeholder), Night View/Seasonal Look/Holiday
+  Decor extras (with season/holiday sub-choice), Premium custom request
+  (350-character limit), logo upload, and a new Structural vs. Cosmetic
+  Breakdown add-on ($19.99/render). File-size limits enforced on both
+  uploads (15MB photo, 5MB logo), with filesize shown next to the filename.
+- Extracted the header into a shared `SiteHeader` component, used on both
+  pages, with corrected anchor links.
+- Rewrote the homepage's "Our Difference" section into four concrete
+  differentiators instead of one paragraph.
+- Connected Cloudflare D1 for real: created the production database,
+  applied the canonical schema, and loaded the full reference dataset
+  (133 styles, 259 design elements, 17,556 style-compatibility pairs) to
+  both local and production, verified row-for-row identical.
+- All Facebook links now open in a new tab.
+
 ## v0.3.0 — 2026-09-14
 
 - Replaced the Believable/Conceptual two-tier "Add a Style" pricing with a
