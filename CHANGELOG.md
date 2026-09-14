@@ -3,6 +3,13 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.4.1 — 2026-09-14
+
+- FAQ section now has an ivory background (was transparent/dark), with
+  scoped darker gold/gray text for legibility.
+- Our Difference section now has a solid gold background, with dark-ink
+  headline/eyebrow; the four differentiator cards are unchanged.
+
 ## v0.4.0 — 2026-09-14
 
 - Added `/start`, the order configurator: photo upload, Starter package,
