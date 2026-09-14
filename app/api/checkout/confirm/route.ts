@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getStripeClient } from "@/lib/stripe";
+import { sendOrderConfirmationEmail } from "@/lib/email";
 
 // Called from the Stripe success redirect to finalize an order the moment
 // the customer lands back on the site. The webhook (/api/stripe/webhook)
@@ -54,6 +55,12 @@ export async function GET(req: NextRequest) {
     )
       .bind(now, payment.order_id)
       .run();
+
+    await sendOrderConfirmationEmail(env.RESEND_API_KEY, {
+      toEmail: session.customer_details?.email ?? null,
+      orderId: payment.order_id,
+      totalCents: session.amount_total ?? 0,
+    });
   }
 
   return NextResponse.json({

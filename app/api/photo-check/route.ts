@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { checkGatePhoto } from "@/lib/openai";
 
-// Real upload + basic validity check. Gate 0 (is this a structure?) and
-// Gate 1 (residential vs. non-residential) are NOT implemented here yet —
-// those need a real vision-model call. This endpoint only confirms the
-// upload is a genuine, storable JPG/PNG and puts it in R2.
+// Real upload + validity check, including Gate 0/1 (Automation Routing
+// Sheet Phase 1 steps 3-4: is this a structure, is it residential) plus a
+// basic quality read (step 2), bundled into one vision call. The gate
+// fails open — with no OPENAI_API_KEY set, it's skipped and the upload is
+// accepted on format/size validity alone, same as before this existed.
 
 const MAX_BYTES = 15 * 1024 * 1024;
 
@@ -40,7 +42,8 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const buf = new Uint8Array(await file.arrayBuffer());
+  const arrayBuffer = await file.arrayBuffer();
+  const buf = new Uint8Array(arrayBuffer);
   const detected = detectImageType(buf);
 
   if (!detected) {
@@ -50,8 +53,21 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  const { env } = getCloudflareContext() as unknown as {
+    env: EnvWithMedia & { OPENAI_API_KEY?: string };
+  };
+
+  const gate = await checkGatePhoto(env.OPENAI_API_KEY, arrayBuffer, detected.mime);
+  if (gate.ran && !gate.passed) {
+    return NextResponse.json({
+      valid: false,
+      reason: gate.reason || "This photo doesn't look like a residential exterior.",
+      gatePassed: false,
+      gateReason: gate.reason,
+    });
+  }
+
   const key = `originals/${crypto.randomUUID()}.${detected.ext}`;
-  const { env } = getCloudflareContext() as unknown as { env: EnvWithMedia };
 
   let storedInR2 = false;
   if (env.MEDIA) {
@@ -61,5 +77,11 @@ export async function POST(req: NextRequest) {
     storedInR2 = true;
   }
 
-  return NextResponse.json({ valid: true, key, storedInR2 });
+  return NextResponse.json({
+    valid: true,
+    key,
+    storedInR2,
+    gatePassed: gate.ran ? gate.passed : null,
+    gateReason: gate.reason,
+  });
 }

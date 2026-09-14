@@ -14,9 +14,13 @@
   ],
 
   // Publishable keys are designed to be public — safe to commit.
-  // STRIPE_SECRET_KEY is NOT here; it's set via `wrangler secret put`.
+  // STRIPE_SECRET_KEY, OPENAI_API_KEY, RESEND_API_KEY are NOT here;
+  // they're set via `wrangler secret put`.
   "vars": {
-    "STRIPE_PUBLISHABLE_KEY": "pk_test_51UFPymRpZCDiXLbkpLGJokCGgHpFTOg84cdJHQ3RRCt7gXYcyOPiCwBseh6rU6tS2hyWD6dLW9xEmVuVDv2wElSz00J9ML8qhX"
+    "STRIPE_PUBLISHABLE_KEY": "pk_test_51UFPymRpZCDiXLbkpLGJokCGgHpFTOg84cdJHQ3RRCt7gXYcyOPiCwBseh6rU6tS2hyWD6dLW9xEmVuVDv2wElSz00J9ML8qhX",
+    // Max orders accepted per UTC day (lib/capacity.ts). Placeholder —
+    // tune to real production throughput.
+    "DAILY_INTAKE_CAP": "5"
   },
 
   // --- Storage bindings (Section 7 of the project briefing) ---

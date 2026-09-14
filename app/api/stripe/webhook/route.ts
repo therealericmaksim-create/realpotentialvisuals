@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getStripeClient } from "@/lib/stripe";
+import { sendOrderConfirmationEmail } from "@/lib/email";
 import type Stripe from "stripe";
 
 // Reliable, out-of-band payment confirmation — catches the case where a
@@ -67,6 +68,12 @@ export async function POST(req: NextRequest) {
         )
           .bind(now, payment.order_id)
           .run();
+
+        await sendOrderConfirmationEmail(env.RESEND_API_KEY, {
+          toEmail: session.customer_details?.email ?? null,
+          orderId: payment.order_id,
+          totalCents: session.amount_total ?? 0,
+        });
       }
     }
   }

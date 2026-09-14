@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { computeOrderTotalCents } from "@/lib/orderPricing";
+import { reserveDailyIntakeSlot } from "@/lib/capacity";
 
 // Persists the /start form into the orders/order_items tables. The total is
 // recomputed here from the submitted selections against lib/pricing.ts —
@@ -31,6 +32,11 @@ type AdditionalStyleInput = {
 
 type CreateOrderBody = {
   photoKey: string | null;
+  propertyAddress: string;
+  hoaAnswer: string;
+  historicDistrictAnswer: string;
+  gatePassed: boolean | null;
+  gateReason: string | null;
   starter: StarterInput;
   additionalStyles: AdditionalStyleInput[];
   premiumEnabled: boolean;
@@ -66,16 +72,27 @@ export async function POST(req: NextRequest) {
 
   await env.DB.prepare(
     `INSERT INTO orders (
-       id, status, photo_key, disclosure_accepted_at,
+       id, status, photo_key, property_address, hoa_answer,
+       historic_district_answer, gate_passed, gate_reason,
+       disclosure_accepted_at,
        starter_night, starter_seasonal, starter_season_choice,
        starter_holiday, starter_holiday_choice, starter_breakdown,
        premium_enabled, premium_text, logo_key, total_amount_cents,
        created_at, updated_at
-     ) VALUES (?, 'started', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     ) VALUES (?, 'started', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       orderId,
       body.photoKey ?? null,
+      body.propertyAddress || null,
+      body.hoaAnswer || null,
+      body.historicDistrictAnswer || null,
+      body.gatePassed === null || body.gatePassed === undefined
+        ? null
+        : body.gatePassed
+          ? 1
+          : 0,
+      body.gateReason || null,
       body.starter?.night ? 1 : 0,
       body.starter?.seasonal ? 1 : 0,
       body.starter?.seasonChoice || null,
@@ -130,6 +147,7 @@ type UpdateOrderBody = {
   orderId: string;
   status?: string;
   acceptDisclosure?: boolean;
+  checkCapacity?: boolean;
 };
 
 export async function PATCH(req: NextRequest) {
@@ -150,6 +168,28 @@ export async function PATCH(req: NextRequest) {
       .run();
   }
 
+  // Routing Sheet Phase 1 step 6 — an atomic reserve against today's cap.
+  // Reaching the cap doesn't block checkout (no business rule yet for
+  // turning away a paying customer); it just means an honest position/
+  // "today is full" note instead of a fabricated one.
+  let capacity: { reserved: boolean; position: number | null; cap: number } | null =
+    null;
+  if (body.checkCapacity) {
+    const result = await reserveDailyIntakeSlot(env.DB, env);
+    capacity = {
+      reserved: result.reserved,
+      position: result.reserved ? result.position : null,
+      cap: result.cap,
+    };
+    if (result.reserved) {
+      await env.DB.prepare(
+        `UPDATE orders SET queue_position = ?, updated_at = ? WHERE id = ?`
+      )
+        .bind(result.position, now, body.orderId)
+        .run();
+    }
+  }
+
   if (body.status) {
     await env.DB.prepare(
       `UPDATE orders SET status = ?, updated_at = ? WHERE id = ?`
@@ -158,9 +198,16 @@ export async function PATCH(req: NextRequest) {
       .run();
   }
 
-  const row = await env.DB.prepare(`SELECT status FROM orders WHERE id = ?`)
+  const row = await env.DB.prepare(
+    `SELECT status, queue_position FROM orders WHERE id = ?`
+  )
     .bind(body.orderId)
-    .first<{ status: string }>();
+    .first<{ status: string; queue_position: number | null }>();
 
-  return NextResponse.json({ orderId: body.orderId, status: row?.status });
+  return NextResponse.json({
+    orderId: body.orderId,
+    status: row?.status,
+    queuePosition: row?.queue_position ?? null,
+    capacity,
+  });
 }

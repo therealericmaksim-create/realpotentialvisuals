@@ -3,7 +3,7 @@
 import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
-import { STYLE_FAMILIES, slugifyStyleName } from "@/lib/styles";
+import { STYLE_FAMILIES } from "@/lib/styles";
 import { AI_DISCLOSURE_TEXT } from "@/lib/disclosure";
 import {
   STARTER_PRICE,
@@ -57,31 +57,46 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// Shows an example render for the selected style once one exists at
-// /public/images/styles/<slug>.jpg. Falls back to a plain placeholder —
-// most styles don't have a real render yet.
-function StylePreview({ styleName }: { styleName: string }) {
-  const [failed, setFailed] = useState(false);
-  const slug = slugifyStyleName(styleName);
+// Fetches and shows the style's full architectural description on demand
+// — 133 of these is too much to ship in the page bundle, so this queries
+// /api/styles/description instead of rendering an image placeholder.
+function StyleDescription({ styleName }: { styleName: string }) {
+  const [description, setDescription] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => setFailed(false), [styleName]);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setDescription(null);
+
+    fetch(`/api/styles/description?name=${encodeURIComponent(styleName)}`)
+      .then((res) => res.json() as Promise<{ description?: string | null }>)
+      .then((data) => {
+        if (!cancelled) setDescription(data.description ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setDescription(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [styleName]);
 
   return (
     <div className="cfg-style-preview">
-      {!failed ? (
-        <img
-          src={`/images/styles/${slug}.jpg`}
-          alt={`Example ${styleName} render`}
-          onError={() => setFailed(true)}
-        />
+      {loading ? (
+        <p className="cfg-style-preview-note">Loading description&hellip;</p>
+      ) : description ? (
+        <p className="cfg-style-desc">{description}</p>
       ) : (
         <div className="cfg-style-preview-placeholder">
-          Example image coming soon for {styleName}
+          Description coming soon for {styleName}
         </div>
       )}
-      <p className="cfg-style-preview-note">
-        Example only — actual output rendering may vary.
-      </p>
     </div>
   );
 }
@@ -108,6 +123,11 @@ function StartPageInner() {
 
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [queueInfo, setQueueInfo] = useState<{
+    position: number | null;
+    cap: number;
+    reserved: boolean;
+  } | null>(null);
 
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -116,6 +136,12 @@ function StartPageInner() {
     "idle" | "checking" | "valid" | "invalid"
   >("idle");
   const [photoKey, setPhotoKey] = useState<string | null>(null);
+  const [gatePassed, setGatePassed] = useState<boolean | null>(null);
+  const [gateReason, setGateReason] = useState<string | null>(null);
+
+  const [propertyAddress, setPropertyAddress] = useState("");
+  const [hoaAnswer, setHoaAnswer] = useState("");
+  const [historicDistrictAnswer, setHistoricDistrictAnswer] = useState("");
 
   const [starterExtras, setStarterExtras] =
     useState<Record<ExtraKey, boolean>>(emptyExtras());
@@ -166,7 +192,12 @@ function StartPageInner() {
         valid: boolean;
         key?: string;
         reason?: string;
+        gatePassed?: boolean | null;
+        gateReason?: string;
       };
+
+      setGatePassed(data.gatePassed ?? null);
+      setGateReason(data.gateReason ?? null);
 
       if (data.valid && data.key) {
         setPhotoStatus("valid");
@@ -310,6 +341,11 @@ function StartPageInner() {
     try {
       const payload = {
         photoKey,
+        propertyAddress,
+        hoaAnswer,
+        historicDistrictAnswer,
+        gatePassed,
+        gateReason,
         starter: {
           night: starterExtras.night,
           seasonal: starterExtras.seasonal,
@@ -403,9 +439,9 @@ function StartPageInner() {
     }
   }
 
-  // Daily-intake: real capacity/rate-limit checking isn't built yet (see
-  // pending work), so this just marks the order queued and moves straight
-  // to Stripe hosted Checkout for the full order total.
+  // Daily-intake: an atomic reserve against today's cap (lib/capacity.ts),
+  // then straight to Stripe hosted Checkout. Reaching the cap doesn't block
+  // checkout — see the route's own note — it just changes the message.
   useEffect(() => {
     if (step !== "daily-intake" || !orderId) return;
     const t = setTimeout(async () => {
@@ -413,10 +449,14 @@ function StartPageInner() {
         const res = await fetch("/api/order", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderId, status: "queued" }),
+          body: JSON.stringify({ orderId, status: "queued", checkCapacity: true }),
         });
-        const data = (await res.json()) as { status?: string };
+        const data = (await res.json()) as {
+          status?: string;
+          capacity?: { reserved: boolean; position: number | null; cap: number } | null;
+        };
         setOrderStatus(data.status ?? "queued");
+        if (data.capacity) setQueueInfo(data.capacity);
       } finally {
         startCheckout(orderId);
       }
@@ -522,6 +562,13 @@ function StartPageInner() {
               Confirming there&apos;s room to start your order, then sending
               you to secure checkout.
             </p>
+            {queueInfo && (
+              <div className="flow-note">
+                {queueInfo.reserved
+                  ? `You're order #${queueInfo.position} in today's queue (cap ${queueInfo.cap}/day).`
+                  : "Today's queue is full — you'll be first up next business day."}
+              </div>
+            )}
           </div>
         </div>
       </>
@@ -666,6 +713,44 @@ function StartPageInner() {
                 )}
               </>
             )}
+          </div>
+
+          {/* ---------------- PROPERTY DETAILS ---------------- */}
+          <div className="cfg-card">
+            <h2>Property Details</h2>
+            <p className="cfg-sub">
+              Helps us check zoning, historic-overlay, and feasibility
+              questions before we start.
+            </p>
+            <input
+              type="text"
+              className="cfg-sub-select"
+              style={{ marginBottom: "12px" }}
+              placeholder="Property address"
+              value={propertyAddress}
+              onChange={(e) => setPropertyAddress(e.target.value)}
+            />
+            <select
+              className="cfg-sub-select"
+              style={{ marginBottom: "12px" }}
+              value={hoaAnswer}
+              onChange={(e) => setHoaAnswer(e.target.value)}
+            >
+              <option value="">Is this property in an HOA?&hellip;</option>
+              <option value="yes">Yes, it&apos;s in an HOA</option>
+              <option value="no">No HOA</option>
+              <option value="not_sure">Not sure</option>
+            </select>
+            <select
+              className="cfg-sub-select"
+              value={historicDistrictAnswer}
+              onChange={(e) => setHistoricDistrictAnswer(e.target.value)}
+            >
+              <option value="">Is this in a historic district?&hellip;</option>
+              <option value="yes">Yes, it&apos;s in a historic district</option>
+              <option value="no">Not in a historic district</option>
+              <option value="not_sure">Not sure</option>
+            </select>
           </div>
 
           {/* ---------------- STARTER PACKAGE ---------------- */}
@@ -813,7 +898,7 @@ function StartPageInner() {
                   </button>
                 </div>
 
-                {row.styleName && <StylePreview styleName={row.styleName} />}
+                {row.styleName && <StyleDescription styleName={row.styleName} />}
 
                 {EXTRA_KEYS.map((key) => (
                   <Fragment key={key}>
@@ -1005,15 +1090,23 @@ function StartPageInner() {
           <button
             type="button"
             className="cfg-continue"
-            disabled={photoStatus !== "valid" || creatingOrder}
+            disabled={
+              photoStatus !== "valid" ||
+              !propertyAddress.trim() ||
+              !hoaAnswer ||
+              !historicDistrictAnswer ||
+              creatingOrder
+            }
             onClick={handleContinueFromForm}
           >
             {creatingOrder ? "Saving Your Order…" : "Continue"}
           </button>
           <div className="cfg-continue-note">
-            {photoStatus === "valid"
-              ? "Next: the AI disclosure, an availability check, then secure checkout."
-              : "Upload and verify your photo above to continue."}
+            {photoStatus !== "valid"
+              ? "Upload and verify your photo above to continue."
+              : !propertyAddress.trim() || !hoaAnswer || !historicDistrictAnswer
+                ? "Fill in your property details above to continue."
+                : "Next: the AI disclosure, an availability check, then secure checkout."}
           </div>
         </div>
       </div>
