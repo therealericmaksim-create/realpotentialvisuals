@@ -1,0 +1,158 @@
+/* ============================================================
+   RealPotential — Admin Shell styles
+   Ported from the realpotential-admin-template.html design.
+   Every selector is scoped under .rpv-admin so nothing here can
+   ever leak into the public marketing site's own styles.
+   ============================================================ */
+.rpv-admin{
+  --bg:#14171A;--panel:#1B1F23;--panel-2:#21262B;--panel-3:#262C32;
+  --border:#2E343A;--border-soft:#252B31;
+  --text:#E8EAED;--text-dim:#9AA3AB;--text-faint:#5C646C;
+
+  --exec:#C97B4A;--exec-dim:rgba(201,123,74,.14);
+  --ops:#4FA98A;--ops-dim:rgba(79,169,138,.14);
+  --mkt:#5B9BD5;--mkt-dim:rgba(91,155,213,.14);
+  --eng:#9AA3AB;--eng-dim:rgba(154,163,171,.14);
+  --fin:#9B87C4;--fin-dim:rgba(155,135,196,.14);
+  --leg:#C2596B;--leg-dim:rgba(194,89,107,.14);
+
+  --good:#4FA98A;--warn:#D9A441;--muted:#5C646C;
+
+  --plate:'IBM Plex Mono',ui-monospace,monospace;
+  --display:'Bricolage Grotesque',system-ui,sans-serif;
+  --body:'Inter',system-ui,sans-serif;
+
+  background:var(--bg);color:var(--text);font-family:var(--body);
+  font-size:14px;-webkit-font-smoothing:antialiased;min-height:100vh;
+}
+.rpv-admin *{box-sizing:border-box}
+.rpv-admin a{color:inherit;text-decoration:none}
+.rpv-admin button{font-family:inherit;cursor:pointer}
+
+.rpv-admin .shell{display:grid;grid-template-columns:264px 1fr;grid-template-rows:60px 1fr;
+  grid-template-areas:"side head" "side main";min-height:100vh}
+
+/* ---------------- HEADER ---------------- */
+.rpv-admin header{grid-area:head;background:var(--panel);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 22px;gap:20px}
+.rpv-admin .brand{font-family:var(--display);font-weight:800;font-size:16px;letter-spacing:-.02em;
+  display:flex;align-items:center;gap:8px;flex:none;background:none;border:none;color:var(--text)}
+.rpv-admin .brand .dot{width:7px;height:7px;border-radius:50%;background:var(--ops)}
+.rpv-admin .search{flex:1;max-width:420px}
+.rpv-admin .search input{width:100%;background:var(--panel-2);border:1px solid var(--border);
+  border-radius:6px;padding:8px 12px 8px 34px;color:var(--text);font-size:13px;
+  background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="%235C646C" stroke-width="1.6"><circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5L13 13"/></svg>');
+  background-repeat:no-repeat;background-position:10px center}
+.rpv-admin .search input::placeholder{color:var(--text-faint)}
+.rpv-admin .header-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+
+.rpv-admin .cap-indicator{display:flex;align-items:center;gap:9px;background:var(--panel-2);
+  border:1px solid var(--border);border-radius:6px;padding:6px 12px}
+.rpv-admin .cap-indicator .lbl{font-family:var(--plate);font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--text-dim)}
+.rpv-admin .cap-track{width:60px;height:5px;background:var(--panel-3);border-radius:3px;overflow:hidden}
+.rpv-admin .cap-fill{height:100%;background:var(--ops)}
+.rpv-admin .cap-num{font-family:var(--plate);font-size:12px;font-weight:600}
+
+.rpv-admin .bell{position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+  background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text-dim)}
+.rpv-admin .bell .pip{position:absolute;top:6px;right:7px;width:7px;height:7px;border-radius:50%;
+  background:var(--leg);border:1.5px solid var(--panel)}
+
+.rpv-admin .staff-badge{display:flex;align-items:center;gap:10px;padding:5px 12px 5px 5px;
+  background:var(--panel-2);border:1px solid var(--border);border-radius:20px}
+.rpv-admin .avatar{width:26px;height:26px;border-radius:50%;background:var(--exec);color:#14171A;
+  font-family:var(--plate);font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center}
+.rpv-admin .staff-badge .name{font-size:12.5px;font-weight:600}
+.rpv-admin .staff-badge .role{font-family:var(--plate);font-size:9.5px;color:var(--text-dim);letter-spacing:.06em}
+
+/* ---------------- SIDEBAR ---------------- */
+.rpv-admin aside{grid-area:side;background:var(--panel);border-right:1px solid var(--border);
+  overflow-y:auto;padding:16px 10px 30px}
+.rpv-admin .nav-group{margin-bottom:2px}
+.rpv-admin .nav-head{display:flex;align-items:center;gap:9px;width:100%;background:none;border:none;
+  color:var(--text);padding:9px 10px;border-radius:6px;font-size:13px;font-weight:500;
+  border-left:3px solid transparent;transition:background .12s;text-align:left}
+.rpv-admin .nav-head:hover{background:var(--panel-2)}
+.rpv-admin .nav-head.active-branch{background:var(--panel-2)}
+.rpv-admin .nav-head .chev{margin-left:auto;font-size:10px;color:var(--text-faint);transition:transform .15s}
+.rpv-admin .nav-group.open .chev{transform:rotate(90deg)}
+.rpv-admin .nav-badge{font-family:var(--plate);font-size:10px;font-weight:600;padding:1px 6px;
+  border-radius:9px;background:var(--panel-3);color:var(--text-dim)}
+.rpv-admin .nav-badge.hot{background:var(--leg-dim);color:var(--leg)}
+
+.rpv-admin .nav-sub{max-height:0;overflow:hidden;transition:max-height .18s ease}
+.rpv-admin .nav-group.open .nav-sub{max-height:500px}
+.rpv-admin .nav-sub button{display:flex;align-items:center;gap:8px;padding:7px 10px 7px 30px;
+  font-size:12.5px;color:var(--text-dim);border-radius:6px;width:100%;background:none;border:none;text-align:left}
+.rpv-admin .nav-sub button:hover{background:var(--panel-2);color:var(--text)}
+.rpv-admin .nav-sub button.active{background:var(--panel-2);color:var(--text)}
+
+.rpv-admin .status-tag{font-family:var(--plate);font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;
+  padding:1px 5px;border-radius:3px;flex:none;margin-left:auto}
+.rpv-admin .status-built{background:rgba(79,169,138,.16);color:var(--good)}
+.rpv-admin .status-partial{background:rgba(217,164,65,.16);color:var(--warn)}
+.rpv-admin .status-planned{background:var(--panel-3);color:var(--text-faint);border:1px dashed var(--border)}
+
+.rpv-admin .priority-pip{font-family:var(--plate);font-size:8.5px;font-weight:700;color:var(--bg);
+  background:var(--warn);width:14px;height:14px;border-radius:3px;display:flex;
+  align-items:center;justify-content:center;flex:none}
+
+.rpv-admin .sidebar-foot{margin-top:18px;padding:12px 12px 4px;border-top:1px solid var(--border-soft)}
+.rpv-admin .sidebar-foot p{font-family:var(--plate);font-size:10px;color:var(--text-faint);line-height:1.7;margin:0}
+
+/* ---------------- MAIN ---------------- */
+.rpv-admin main{grid-area:main;padding:28px 32px 60px;overflow-y:auto}
+.rpv-admin .page-head{margin-bottom:26px}
+.rpv-admin .eyebrow{font-family:var(--plate);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--ops);margin-bottom:8px}
+.rpv-admin .page-head h1{font-family:var(--display);font-weight:800;font-size:26px;margin:0;letter-spacing:-.02em}
+.rpv-admin .page-head p{color:var(--text-dim);font-size:13.5px;margin:8px 0 0;max-width:70ch}
+
+.rpv-admin .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-bottom:32px}
+.rpv-admin .stat-card{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--ops);
+  border-radius:8px;padding:18px 20px}
+.rpv-admin .stat-card.warn{border-left-color:var(--warn)}
+.rpv-admin .stat-card.alert{border-left-color:var(--leg)}
+.rpv-admin .stat-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.rpv-admin .stat-lbl{font-family:var(--plate);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim)}
+.rpv-admin .stat-num{font-family:var(--display);font-weight:800;font-size:32px;line-height:1}
+.rpv-admin .stat-sub{font-size:12px;color:var(--text-faint);margin-top:6px}
+.rpv-admin .stat-link{font-family:var(--plate);font-size:11px;color:var(--ops);background:none;border:none;padding:0}
+
+.rpv-admin .section-block{background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  padding:22px 24px;margin-bottom:18px}
+.rpv-admin .section-block h3{font-family:var(--display);font-size:16px;margin:0 0 4px;font-weight:600}
+.rpv-admin .section-block .note{font-size:12.5px;color:var(--text-dim);margin:0 0 16px}
+.rpv-admin .empty-row{display:flex;align-items:center;gap:10px;padding:14px 0;border-top:1px solid var(--border-soft);
+  font-size:13px;color:var(--text-faint)}
+.rpv-admin .empty-row:first-of-type{border-top:none}
+.rpv-admin .empty-row .status-tag{margin-left:0}
+
+.rpv-admin footer.notice{font-family:var(--plate);font-size:11px;color:var(--text-faint);line-height:1.8;
+  border-top:1px solid var(--border-soft);padding-top:18px;margin-top:10px}
+.rpv-admin footer.notice b{color:var(--text-dim)}
+
+/* ---------------- extra: tables + detail cards (not in the original template) ---------------- */
+.rpv-admin table.data{width:100%;border-collapse:collapse;font-size:13px}
+.rpv-admin table.data th{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);
+  font-family:var(--plate);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim)}
+.rpv-admin table.data td{padding:9px 10px;border-bottom:1px solid var(--border-soft)}
+.rpv-admin table.data tr.clickable{cursor:pointer}
+.rpv-admin table.data tr.clickable:hover td{background:var(--panel-2)}
+.rpv-admin .pill{font-family:var(--plate);font-size:10px;padding:2px 8px;border-radius:9px;
+  background:var(--panel-3);color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em}
+.rpv-admin .back-link{font-family:var(--plate);font-size:12px;color:var(--ops);background:none;border:none;
+  padding:0;margin-bottom:16px;display:inline-block}
+.rpv-admin .btn-primary{padding:10px 18px;background:var(--ops);color:#0c1210;border:none;border-radius:6px;
+  font-weight:700;font-size:13px}
+.rpv-admin .btn-primary:disabled{opacity:.5;cursor:default}
+.rpv-admin .detail-photo{max-width:320px;border-radius:8px;border:1px solid var(--border);display:block;margin:12px 0}
+.rpv-admin .role-chip{font-size:12px;background:var(--panel-3);border:1px solid var(--border);
+  border-radius:12px;padding:3px 10px;color:var(--text)}
+.rpv-admin .loading{color:var(--text-faint);font-family:var(--plate);font-size:12px}
+.rpv-admin .error-text{color:var(--leg);font-family:var(--plate);font-size:12px}
+.rpv-admin form.inline{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.rpv-admin input[type=text],.rpv-admin input[type=email],.rpv-admin select{
+  background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);
+  padding:7px 10px;font-size:13px;font-family:inherit}
