@@ -52,32 +52,45 @@ export async function POST(req: NextRequest) {
         .bind(session.id)
         .first<{ id: string; order_id: string; status: string }>();
 
-      if (payment && payment.status !== "succeeded") {
-        const paymentIntentId =
-          typeof session.payment_intent === "string"
-            ? session.payment_intent
-            : null;
-
-        await env.DB.prepare(
-          `UPDATE payments SET status = 'succeeded', stripe_payment_intent = ?, updated_at = ? WHERE id = ?`
-        )
-          .bind(paymentIntentId, now, payment.id)
-          .run();
-
+      if (payment) {
         const customerEmail = session.customer_details?.email ?? null;
 
-        await env.DB.prepare(
-          `UPDATE orders SET status = 'placed', customer_email = ?, updated_at = ? WHERE id = ?`
-        )
-          .bind(customerEmail, now, payment.order_id)
-          .run();
+        if (payment.status !== "succeeded") {
+          const paymentIntentId =
+            typeof session.payment_intent === "string"
+              ? session.payment_intent
+              : null;
 
-        await sendOrderConfirmationEmail(env.RESEND_API_KEY, {
-          toEmail: customerEmail,
-          orderId: payment.order_id,
-          totalCents: session.amount_total ?? 0,
-        });
+          await env.DB.prepare(
+            `UPDATE payments SET status = 'succeeded', stripe_payment_intent = ?, updated_at = ? WHERE id = ?`
+          )
+            .bind(paymentIntentId, now, payment.id)
+            .run();
 
+          await env.DB.prepare(
+            `UPDATE orders SET status = 'placed', customer_email = ?, updated_at = ? WHERE id = ?`
+          )
+            .bind(customerEmail, now, payment.order_id)
+            .run();
+
+          await sendOrderConfirmationEmail(env.RESEND_API_KEY, {
+            toEmail: customerEmail,
+            orderId: payment.order_id,
+            totalCents: session.amount_total ?? 0,
+          });
+        } else if (customerEmail) {
+          // See /api/checkout/confirm — the event snapshot's customer_details
+          // can trail the completed event by a moment, so backfill a
+          // still-missing email rather than trusting a stale null forever.
+          await env.DB.prepare(
+            `UPDATE orders SET customer_email = COALESCE(customer_email, ?) WHERE id = ?`
+          )
+            .bind(customerEmail, payment.order_id)
+            .run();
+        }
+
+        // Idempotent — safe even when the block above was skipped, so a
+        // late-arriving email still gets a chance to complete linkage.
         await ensurePropertyLinkage(env.DB, payment.order_id);
       }
     }
