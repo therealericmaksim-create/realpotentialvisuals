@@ -10,7 +10,7 @@ interface __BaseEnv_CloudflareEnv {
 	STRIPE_WEBHOOK_SECRET: string;
 	DAILY_INTAKE_CAP: string;
 	OPENAI_API_KEY: string;
-	RESEND_API_KEY?: string;
+	RESEND_API_KEY: string;
 	GOOGLE_MAPS_API_KEY: string;
 	CF_ACCESS_TEAM_DOMAIN: string;
 	CF_ACCESS_AUD: string;
