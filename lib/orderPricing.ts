@@ -3,18 +3,22 @@
 // client-side summary in app/start/page.tsx, but reads from D1 rows instead
 // of live form state, so a tampered client-submitted total can never reach
 // Stripe.
+//
+// v0.10.0 (2026-09-15): every render ordered is one row in order_items —
+// there's no more fixed "Starter Package" bundle. This function is now a
+// straightforward per-row loop instead of the old bundle-vs-additional-style
+// branching.
 
 import {
-  STARTER_PRICE,
-  ADD_STYLE_PRICE,
-  PREMIUM_PRICE,
-  LOGO_PRICE,
+  RENDER_PRICE,
+  TIER_LABELS,
   EXTRA_LABELS,
-  EXTRA_STARTER_BUNDLE_PRICE,
-  EXTRA_ADDITIONAL_STYLE_PRICE,
+  EXTRA_PRICE,
   STRUCTURAL_BREAKDOWN_LABEL,
   STRUCTURAL_BREAKDOWN_PRICE,
+  LOGO_PRICE,
   type ExtraKey,
+  type RenderTier,
 } from "./pricing";
 
 const EXTRA_KEYS: ExtraKey[] = ["night", "seasonal", "holiday"];
@@ -22,16 +26,12 @@ const EXTRA_KEYS: ExtraKey[] = ["night", "seasonal", "holiday"];
 export type OrderLineItem = { label: string; amountCents: number };
 
 export type OrderPricingRow = {
-  starter_night: number;
-  starter_seasonal: number;
-  starter_holiday: number;
-  starter_breakdown: number;
-  premium_enabled: number;
   logo_key: string | null;
 };
 
 export type OrderItemPricingRow = {
-  style_name: string;
+  tier: RenderTier;
+  style_name: string | null;
   night: number;
   seasonal: number;
   holiday: number;
@@ -46,33 +46,14 @@ export function computeOrderLineItems(
   order: OrderPricingRow,
   items: OrderItemPricingRow[]
 ): OrderLineItem[] {
-  const lines: OrderLineItem[] = [
-    { label: "Starter Package", amountCents: toCents(STARTER_PRICE) },
-  ];
-
-  const starterFlags: Record<ExtraKey, number> = {
-    night: order.starter_night,
-    seasonal: order.starter_seasonal,
-    holiday: order.starter_holiday,
-  };
-  for (const key of EXTRA_KEYS) {
-    if (starterFlags[key]) {
-      lines.push({
-        label: `${EXTRA_LABELS[key]} — all 3 Starter renders`,
-        amountCents: toCents(EXTRA_STARTER_BUNDLE_PRICE[key]),
-      });
-    }
-  }
-  if (order.starter_breakdown) {
-    lines.push({
-      label: `${STRUCTURAL_BREAKDOWN_LABEL} — all 3 Starter renders`,
-      amountCents: toCents(STRUCTURAL_BREAKDOWN_PRICE * 3),
-    });
-  }
+  const lines: OrderLineItem[] = [];
 
   items.forEach((item, i) => {
-    const name = item.style_name || `Additional style #${i + 1}`;
-    lines.push({ label: name, amountCents: toCents(ADD_STYLE_PRICE) });
+    const tierLabel = TIER_LABELS[item.tier];
+    const name = item.style_name?.trim() ? item.style_name : `render #${i + 1}`;
+    const label = `${tierLabel} — ${name}`;
+
+    lines.push({ label, amountCents: toCents(RENDER_PRICE[item.tier]) });
 
     const itemFlags: Record<ExtraKey, number> = {
       night: item.night,
@@ -82,25 +63,18 @@ export function computeOrderLineItems(
     for (const key of EXTRA_KEYS) {
       if (itemFlags[key]) {
         lines.push({
-          label: `${EXTRA_LABELS[key]} — ${name}`,
-          amountCents: toCents(EXTRA_ADDITIONAL_STYLE_PRICE[key]),
+          label: `${EXTRA_LABELS[key]} — ${label}`,
+          amountCents: toCents(EXTRA_PRICE),
         });
       }
     }
     if (item.breakdown) {
       lines.push({
-        label: `${STRUCTURAL_BREAKDOWN_LABEL} — ${name}`,
+        label: `${STRUCTURAL_BREAKDOWN_LABEL} — ${label}`,
         amountCents: toCents(STRUCTURAL_BREAKDOWN_PRICE),
       });
     }
   });
-
-  if (order.premium_enabled) {
-    lines.push({
-      label: "Premium Custom Style",
-      amountCents: toCents(PREMIUM_PRICE),
-    });
-  }
 
   if (order.logo_key) {
     lines.push({ label: "Add Your Logo", amountCents: toCents(LOGO_PRICE) });

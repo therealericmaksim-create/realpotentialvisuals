@@ -331,59 +331,66 @@ export default function Home() {
             <h2>Packages &amp; Add-Ons</h2>
           </div>
 
+          <p className="center" style={{ maxWidth: "640px", margin: "0 auto 32px" }}>
+            Upload one photo, then pick how many renders you want in each
+            tier — mix and match freely.
+          </p>
+
           <div className="pricing-top">
-            <div className="price-box featured">
-              <h3>Starter</h3>
-              <div className="big-price">
-                <span className="price-was">$99</span> $79.99
-              </div>
+            <div className="price-box">
+              <h3>Self-Directed</h3>
+              <div className="big-price">$29.99</div>
               <p className="desc">
-                3 professional visualizations, in styles our team hand-picks
-                for your specific home and neighborhood.
+                Per render. You pick the style yourself from our full
+                catalog — fully automated, no waiting on a curator.
+              </p>
+            </div>
+
+            <div className="price-box featured">
+              <h3>Curated</h3>
+              <div className="big-price">$44.99</div>
+              <p className="desc">
+                Per render. Our team picks the style for your specific home
+                and neighborhood, backed by the same structural analysis
+                every tier gets.
               </p>
             </div>
 
             <div className="price-box">
-              <h3>Add a Style</h3>
-              <div className="price-line">
-                <span className="lbl">
-                  Any Style, Your Pick
-                  <span className="sub">we&apos;ll tell you if it&apos;s buildable or conceptual when we deliver it</span>
-                </span>
-                <span className="amt">$39.99</span>
-              </div>
-            </div>
-
-            <div className="price-box">
-              <h3>Something Specific?</h3>
-              <div className="price-line">
-                <span className="lbl">
-                  Premium
-                  <span className="sub">Roman villa, pagoda roof, etc.</span>
-                </span>
-                <span className="amt">$69.99</span>
-              </div>
+              <h3>Premium</h3>
+              <div className="big-price">$59.99</div>
+              <p className="desc">
+                Per render. Describe exactly what you want — a specific era,
+                an unusual roofline, a full custom vision.
+              </p>
             </div>
           </div>
 
           <div className="extras-row">
-            <h3>Extras</h3>
+            <h3>Extras — per render</h3>
             <div className="extras-grid">
               <div className="extra-item">
                 <span className="lbl">Night View</span>
-                <span className="amt">$29.99</span>
+                <span className="amt">$9.99</span>
               </div>
               <div className="extra-item">
                 <span className="lbl">Seasonal Look</span>
-                <span className="amt">$29.99</span>
+                <span className="amt">$9.99</span>
               </div>
               <div className="extra-item">
-                <span className="lbl">Holiday Lighting</span>
-                <span className="amt">$29.99</span>
+                <span className="lbl">Holiday Decor</span>
+                <span className="amt">$9.99</span>
               </div>
               <div className="extra-item">
-                <span className="lbl">Extra Revision</span>
-                <span className="amt">$24.99</span>
+                <span className="lbl">Structural vs. Cosmetic Breakdown</span>
+                <span className="amt">$19.99</span>
+              </div>
+              <div className="extra-item">
+                <span className="lbl">
+                  Extra Revision
+                  <span className="sub">same price as that render&apos;s tier</span>
+                </span>
+                <span className="amt">varies</span>
               </div>
               <div className="extra-item">
                 <span className="lbl">Add Your Logo</span>

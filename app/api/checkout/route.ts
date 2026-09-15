@@ -22,9 +22,7 @@ export async function POST(req: NextRequest) {
   const { env } = getCloudflareContext();
 
   const order = await env.DB.prepare(
-    `SELECT starter_night, starter_seasonal, starter_holiday, starter_breakdown,
-            premium_enabled, logo_key
-     FROM orders WHERE id = ?`
+    `SELECT logo_key FROM orders WHERE id = ?`
   )
     .bind(body.orderId)
     .first<OrderPricingRow>();
@@ -34,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   const itemsResult = await env.DB.prepare(
-    `SELECT style_name, night, seasonal, holiday, breakdown
+    `SELECT tier, style_name, night, seasonal, holiday, breakdown
      FROM order_items WHERE order_id = ?`
   )
     .bind(body.orderId)

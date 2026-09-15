@@ -1,13 +1,41 @@
 // Order-configurator pricing. Source of truth for both the UI display and
-// (eventually) the server-side Stripe line-item calculation — never trust
-// a client-submitted total, this file is what the server re-derives too.
+// the server-side Stripe line-item calculation (lib/orderPricing.ts) —
+// never trust a client-submitted total, that file is what the server
+// re-derives too.
+//
+// v0.10.0 (2026-09-15): replaced the old fixed Starter Package + à la
+// carte additional styles with a pure per-render model. Every render a
+// customer orders is one of three tiers; there's no free/included render
+// anymore. See docs/admin-navigation-ia.md and CHANGELOG.md for the
+// business reasoning.
 
-// Running a promo — STARTER_ORIGINAL_PRICE is shown struck through,
-// STARTER_PRICE is the real, charged price.
-export const STARTER_ORIGINAL_PRICE = 99;
-export const STARTER_PRICE = 79.99;
-export const ADD_STYLE_PRICE = 39.99;
-export const PREMIUM_PRICE = 69.99;
+export type RenderTier = "self_directed" | "curated" | "premium";
+
+export const RENDER_PRICE: Record<RenderTier, number> = {
+  self_directed: 29.99,
+  curated: 44.99,
+  premium: 59.99,
+};
+
+export const TIER_LABELS: Record<RenderTier, string> = {
+  self_directed: "Self-Directed",
+  curated: "Curated",
+  premium: "Premium",
+};
+
+export const TIER_DESCRIPTIONS: Record<RenderTier, string> = {
+  self_directed:
+    "You pick the style yourself from our full catalog. Fully automated — no waiting on a curator.",
+  curated:
+    "Our team picks the style for your specific home and neighborhood, using the same structural analysis as every tier.",
+  premium:
+    "Describe exactly what you want — a specific era, an unusual roofline, a full custom vision.",
+};
+
+// A revision costs whatever that render's own tier already costs — same
+// rate card, no separate revision price list to keep in sync.
+export const REVISION_PRICE = RENDER_PRICE;
+
 export const LOGO_PRICE = 29.99;
 export const PREMIUM_CHAR_LIMIT = 550;
 
@@ -25,30 +53,8 @@ export const EXTRA_LABELS: Record<ExtraKey, string> = {
   holiday: "Holiday Decor",
 };
 
-// Base single-render price for each extra.
-export const EXTRA_BASE_PRICE: Record<ExtraKey, number> = {
-  night: 29.99,
-  seasonal: 29.99,
-  holiday: 29.99,
-};
-
-// Selected now, applies to all 3 Starter renders before the customer has
-// even seen which styles they'll get (25% off the base rate x3). After
-// curation, the customer can instead apply an extra to just one specific
-// Starter render at the full EXTRA_BASE_PRICE rate — that choice happens
-// later, on the post-curation order page, not here.
-export const EXTRA_STARTER_BUNDLE_PRICE: Record<ExtraKey, number> = {
-  night: 67.48,
-  seasonal: 67.48,
-  holiday: 67.48,
-};
-
-// Attached to one additional (customer-picked) style — 25% off base.
-export const EXTRA_ADDITIONAL_STYLE_PRICE: Record<ExtraKey, number> = {
-  night: 22.49,
-  seasonal: 22.49,
-  holiday: 22.49,
-};
+// Flat per-render price — same regardless of tier, no bundle discount.
+export const EXTRA_PRICE = 9.99;
 
 export type SeasonOption = {
   value: string;

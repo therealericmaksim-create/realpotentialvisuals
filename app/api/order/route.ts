@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { computeOrderTotalCents } from "@/lib/orderPricing";
 import { reserveDailyIntakeSlot } from "@/lib/capacity";
+import { RENDER_PRICE, type RenderTier } from "@/lib/pricing";
 
 // Persists the /start form into the orders/order_items tables. The total is
 // recomputed here from the submitted selections against lib/pricing.ts —
@@ -9,25 +10,22 @@ import { reserveDailyIntakeSlot } from "@/lib/capacity";
 // recomputes it again from the saved D1 rows before creating a Stripe
 // session, so this route being wrong could only ever misprice what gets
 // *saved*, never what gets *charged*.
+//
+// v0.10.0 (2026-09-15): every render ordered is its own render item —
+// self_directed (customer picks the style now), curated (style assigned
+// later, once a curation workspace exists), or premium (a free-text custom
+// request instead of a catalog style).
 
-type StarterInput = {
+type RenderItemInput = {
+  tier: RenderTier;
+  styleName?: string; // self_directed only
+  customText?: string; // premium only
   night: boolean;
   seasonal: boolean;
   seasonChoice: string;
   holiday: boolean;
   holidayChoice: string;
   breakdown: boolean;
-};
-
-type AdditionalStyleInput = {
-  styleName: string;
-  night: boolean;
-  seasonal: boolean;
-  seasonChoice: string;
-  holiday: boolean;
-  holidayChoice: string;
-  breakdown: boolean;
-  unitPrice: number;
 };
 
 type CreateOrderBody = {
@@ -37,10 +35,7 @@ type CreateOrderBody = {
   historicDistrictAnswer: string;
   gatePassed: boolean | null;
   gateReason: string | null;
-  starter: StarterInput;
-  additionalStyles: AdditionalStyleInput[];
-  premiumEnabled: boolean;
-  premiumText: string;
+  renderItems: RenderItemInput[];
   logoSelected: boolean;
   total: number;
 };
@@ -51,22 +46,17 @@ export async function POST(req: NextRequest) {
 
   const orderId = crypto.randomUUID();
   const now = new Date().toISOString();
+  const renderItems = body.renderItems ?? [];
 
   const totalCents = computeOrderTotalCents(
-    {
-      starter_night: body.starter?.night ? 1 : 0,
-      starter_seasonal: body.starter?.seasonal ? 1 : 0,
-      starter_holiday: body.starter?.holiday ? 1 : 0,
-      starter_breakdown: body.starter?.breakdown ? 1 : 0,
-      premium_enabled: body.premiumEnabled ? 1 : 0,
-      logo_key: body.logoSelected ? "pending-upload" : null,
-    },
-    (body.additionalStyles ?? []).map((style) => ({
-      style_name: style.styleName,
-      night: style.night ? 1 : 0,
-      seasonal: style.seasonal ? 1 : 0,
-      holiday: style.holiday ? 1 : 0,
-      breakdown: style.breakdown ? 1 : 0,
+    { logo_key: body.logoSelected ? "pending-upload" : null },
+    renderItems.map((item) => ({
+      tier: item.tier,
+      style_name: item.styleName ?? null,
+      night: item.night ? 1 : 0,
+      seasonal: item.seasonal ? 1 : 0,
+      holiday: item.holiday ? 1 : 0,
+      breakdown: item.breakdown ? 1 : 0,
     }))
   );
 
@@ -74,12 +64,9 @@ export async function POST(req: NextRequest) {
     `INSERT INTO orders (
        id, status, photo_key, property_address, hoa_answer,
        historic_district_answer, gate_passed, gate_reason,
-       disclosure_accepted_at,
-       starter_night, starter_seasonal, starter_season_choice,
-       starter_holiday, starter_holiday_choice, starter_breakdown,
-       premium_enabled, premium_text, logo_key, total_amount_cents,
+       disclosure_accepted_at, logo_key, total_amount_cents,
        created_at, updated_at
-     ) VALUES (?, 'started', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     ) VALUES (?, 'started', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`
   )
     .bind(
       orderId,
@@ -93,14 +80,6 @@ export async function POST(req: NextRequest) {
           ? 1
           : 0,
       body.gateReason || null,
-      body.starter?.night ? 1 : 0,
-      body.starter?.seasonal ? 1 : 0,
-      body.starter?.seasonChoice || null,
-      body.starter?.holiday ? 1 : 0,
-      body.starter?.holidayChoice || null,
-      body.starter?.breakdown ? 1 : 0,
-      body.premiumEnabled ? 1 : 0,
-      body.premiumText || null,
       // Logo isn't uploaded to R2 yet (no /api/logo-check exists) — only
       // whether one was selected is recorded, not a real file reference.
       body.logoSelected ? "pending-upload" : null,
@@ -110,32 +89,40 @@ export async function POST(req: NextRequest) {
     )
     .run();
 
-  for (const style of body.additionalStyles ?? []) {
-    const lookup = await env.DB.prepare(
-      `SELECT id FROM styles WHERE name = ?`
-    )
-      .bind(style.styleName)
-      .first<{ id: string }>();
+  for (const item of renderItems) {
+    let styleId: string | null = null;
+    if (item.tier === "self_directed" && item.styleName) {
+      const lookup = await env.DB.prepare(`SELECT id FROM styles WHERE name = ?`)
+        .bind(item.styleName)
+        .first<{ id: string }>();
+      styleId = lookup?.id ?? null;
+    }
+
+    const unitPrice = RENDER_PRICE[item.tier];
 
     await env.DB.prepare(
       `INSERT INTO order_items (
-         id, order_id, style_id, style_name,
+         id, order_id, tier, style_id, style_name, custom_text,
          night, seasonal, season_choice, holiday, holiday_choice,
          breakdown, unit_price_cents
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         crypto.randomUUID(),
         orderId,
-        lookup?.id ?? null,
-        style.styleName,
-        style.night ? 1 : 0,
-        style.seasonal ? 1 : 0,
-        style.seasonChoice || null,
-        style.holiday ? 1 : 0,
-        style.holidayChoice || null,
-        style.breakdown ? 1 : 0,
-        Math.round((style.unitPrice ?? 0) * 100)
+        item.tier,
+        styleId,
+        // style_name is NOT NULL in the schema — '' means "not assigned
+        // yet" for curated, and premium always uses custom_text instead.
+        item.tier === "self_directed" ? item.styleName || "" : "",
+        item.tier === "premium" ? item.customText || "" : null,
+        item.night ? 1 : 0,
+        item.seasonal ? 1 : 0,
+        item.seasonChoice || null,
+        item.holiday ? 1 : 0,
+        item.holidayChoice || null,
+        item.breakdown ? 1 : 0,
+        Math.round(unitPrice * 100)
       )
       .run();
   }

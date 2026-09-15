@@ -33,13 +33,18 @@ export type Phase2RunResult = {
   reused: boolean;
   logs: AiCallLog[];
   totalCostUsd: number;
+  // null when the order has no curated-tier render to judge — self_directed
+  // (customer already picked their style) and premium (a custom request,
+  // not matched against the catalog) don't need an AI vote or a
+  // curator/algorithm consensus, so steps 18 and 20 are skipped entirely
+  // rather than spending an AI call on a question nobody's asking.
   consensus: {
     primaryStyleId: string | null;
     primaryStyleName: string | null;
     secondaryStyleId: string | null;
     secondaryStyleName: string | null;
     classificationStatus: string;
-  };
+  } | null;
 };
 
 async function sha256Hex(input: string): Promise<string> {
@@ -69,6 +74,19 @@ export async function runPhase2Analysis(
   if (!order) throw new Error(`Order not found: ${orderId}`);
   if (!order.property_id) throw new Error(`Order has no linked property yet: ${orderId}`);
   if (!order.photo_key) throw new Error(`Order has no photo: ${orderId}`);
+
+  // A curated-tier render is the only reason to run the AI vote / consensus
+  // steps (18, 20) — self_directed already has its style, premium isn't
+  // matched against the catalog at all. No order_items rows at all (e.g. a
+  // pre-v0.10.0 legacy order) falls back to running the full pipeline,
+  // matching the behavior every order had before tiers existed.
+  const orderItemTiers = await env.DB.prepare(
+    `SELECT tier FROM order_items WHERE order_id = ?`
+  )
+    .bind(orderId)
+    .all<{ tier: string }>();
+  const tierRows = orderItemTiers.results ?? [];
+  const needsCuration = tierRows.length === 0 || tierRows.some((r) => r.tier === "curated");
 
   const zoneResolution = await resolveClimateZoneId(env.DB, order.property_address);
   if (!zoneResolution) {
@@ -366,66 +384,79 @@ export async function runPhase2Analysis(
     ).run();
   }
 
-  // --- Step 18: AI vote ---
   const styleNameById = new Map((styleRows.results ?? []).map((s) => [s.id, s.name]));
-  const styleIdByName = new Map((styleRows.results ?? []).map((s) => [s.name, s.id]));
-  const { result: vote, log: voteLog } = await castAiVote(
-    env.OPENAI_API_KEY,
-    photoDataUrl,
-    [...styleNameById.values()]
-  );
-  logs.push(voteLog);
 
-  const aiVotes: VoterAiVote[] = [];
-  const primaryStyleId = styleIdByName.get(vote.primary_style);
-  if (primaryStyleId) {
-    aiVotes.push({ styleId: primaryStyleId, voteRank: 1, confidence: vote.primary_confidence, reasoning: vote.primary_reasoning });
-    await env.DB.prepare(
-      `INSERT INTO structure_profile_style_votes (id, structure_profile_id, voter_type, style_id, vote_rank, confidence, is_abstain, reasoning, voted_at)
-       VALUES (?, ?, 'ai', ?, 1, ?, 0, ?, ?)
-       ON CONFLICT(structure_profile_id, voter_type, vote_rank) DO UPDATE SET style_id = excluded.style_id, confidence = excluded.confidence`
-    )
-      .bind(crypto.randomUUID(), structureProfileId, primaryStyleId, vote.primary_confidence, vote.primary_reasoning, now)
-      .run();
-  }
-  const secondaryStyleId = vote.secondary_style ? styleIdByName.get(vote.secondary_style) : null;
-  if (secondaryStyleId) {
-    aiVotes.push({ styleId: secondaryStyleId, voteRank: 2, confidence: vote.secondary_confidence });
-    await env.DB.prepare(
-      `INSERT INTO structure_profile_style_votes (id, structure_profile_id, voter_type, style_id, vote_rank, confidence, is_abstain, voted_at)
-       VALUES (?, ?, 'ai', ?, 2, ?, 0, ?)
-       ON CONFLICT(structure_profile_id, voter_type, vote_rank) DO UPDATE SET style_id = excluded.style_id, confidence = excluded.confidence`
-    )
-      .bind(crypto.randomUUID(), structureProfileId, secondaryStyleId, vote.secondary_confidence, now)
-      .run();
-  }
+  let consensusResult: Phase2RunResult["consensus"] = null;
 
-  // --- Step 20: 2-voter blend ---
-  const consensus = computeVoterConsensus(algoRows, aiVotes, styleFamilyById);
-  await env.DB.prepare(
-    `INSERT INTO structure_profile_consensus (
-       id, structure_profile_id, primary_style_id, primary_score_pct, secondary_style_id, secondary_score_pct,
-       classification_status, ai_dissented, dissent_reasoning, voter_weights_used, computed_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(structure_profile_id) DO UPDATE SET
-       primary_style_id = excluded.primary_style_id, primary_score_pct = excluded.primary_score_pct,
-       secondary_style_id = excluded.secondary_style_id, secondary_score_pct = excluded.secondary_score_pct,
-       classification_status = excluded.classification_status, computed_at = excluded.computed_at`
-  )
-    .bind(
-      crypto.randomUUID(),
-      structureProfileId,
-      consensus.primaryStyleId,
-      consensus.primaryScorePct,
-      consensus.secondaryStyleId,
-      consensus.secondaryScorePct,
-      consensus.classificationStatus,
-      consensus.aiDissented ? 1 : 0,
-      consensus.dissentReasoning,
-      JSON.stringify(consensus.voterWeightsUsed),
-      now
+  if (needsCuration) {
+    // --- Step 18: AI vote ---
+    const styleIdByName = new Map((styleRows.results ?? []).map((s) => [s.name, s.id]));
+    const { result: vote, log: voteLog } = await castAiVote(
+      env.OPENAI_API_KEY,
+      photoDataUrl,
+      [...styleNameById.values()]
+    );
+    logs.push(voteLog);
+
+    const aiVotes: VoterAiVote[] = [];
+    const primaryStyleId = styleIdByName.get(vote.primary_style);
+    if (primaryStyleId) {
+      aiVotes.push({ styleId: primaryStyleId, voteRank: 1, confidence: vote.primary_confidence, reasoning: vote.primary_reasoning });
+      await env.DB.prepare(
+        `INSERT INTO structure_profile_style_votes (id, structure_profile_id, voter_type, style_id, vote_rank, confidence, is_abstain, reasoning, voted_at)
+         VALUES (?, ?, 'ai', ?, 1, ?, 0, ?, ?)
+         ON CONFLICT(structure_profile_id, voter_type, vote_rank) DO UPDATE SET style_id = excluded.style_id, confidence = excluded.confidence`
+      )
+        .bind(crypto.randomUUID(), structureProfileId, primaryStyleId, vote.primary_confidence, vote.primary_reasoning, now)
+        .run();
+    }
+    const secondaryStyleId = vote.secondary_style ? styleIdByName.get(vote.secondary_style) : null;
+    if (secondaryStyleId) {
+      aiVotes.push({ styleId: secondaryStyleId, voteRank: 2, confidence: vote.secondary_confidence });
+      await env.DB.prepare(
+        `INSERT INTO structure_profile_style_votes (id, structure_profile_id, voter_type, style_id, vote_rank, confidence, is_abstain, voted_at)
+         VALUES (?, ?, 'ai', ?, 2, ?, 0, ?)
+         ON CONFLICT(structure_profile_id, voter_type, vote_rank) DO UPDATE SET style_id = excluded.style_id, confidence = excluded.confidence`
+      )
+        .bind(crypto.randomUUID(), structureProfileId, secondaryStyleId, vote.secondary_confidence, now)
+        .run();
+    }
+
+    // --- Step 20: 2-voter blend ---
+    const consensus = computeVoterConsensus(algoRows, aiVotes, styleFamilyById);
+    await env.DB.prepare(
+      `INSERT INTO structure_profile_consensus (
+         id, structure_profile_id, primary_style_id, primary_score_pct, secondary_style_id, secondary_score_pct,
+         classification_status, ai_dissented, dissent_reasoning, voter_weights_used, computed_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(structure_profile_id) DO UPDATE SET
+         primary_style_id = excluded.primary_style_id, primary_score_pct = excluded.primary_score_pct,
+         secondary_style_id = excluded.secondary_style_id, secondary_score_pct = excluded.secondary_score_pct,
+         classification_status = excluded.classification_status, computed_at = excluded.computed_at`
     )
-    .run();
+      .bind(
+        crypto.randomUUID(),
+        structureProfileId,
+        consensus.primaryStyleId,
+        consensus.primaryScorePct,
+        consensus.secondaryStyleId,
+        consensus.secondaryScorePct,
+        consensus.classificationStatus,
+        consensus.aiDissented ? 1 : 0,
+        consensus.dissentReasoning,
+        JSON.stringify(consensus.voterWeightsUsed),
+        now
+      )
+      .run();
+
+    consensusResult = {
+      primaryStyleId: consensus.primaryStyleId,
+      primaryStyleName: consensus.primaryStyleId ? (styleNameById.get(consensus.primaryStyleId) ?? null) : null,
+      secondaryStyleId: consensus.secondaryStyleId,
+      secondaryStyleName: consensus.secondaryStyleId ? (styleNameById.get(consensus.secondaryStyleId) ?? null) : null,
+      classificationStatus: consensus.classificationStatus,
+    };
+  }
 
   return {
     orderId,
@@ -434,12 +465,6 @@ export async function runPhase2Analysis(
     reused,
     logs,
     totalCostUsd: logs.reduce((sum, l) => sum + l.costUsd, 0),
-    consensus: {
-      primaryStyleId: consensus.primaryStyleId,
-      primaryStyleName: consensus.primaryStyleId ? (styleNameById.get(consensus.primaryStyleId) ?? null) : null,
-      secondaryStyleId: consensus.secondaryStyleId,
-      secondaryStyleName: consensus.secondaryStyleId ? (styleNameById.get(consensus.secondaryStyleId) ?? null) : null,
-      classificationStatus: consensus.classificationStatus,
-    },
+    consensus: consensusResult,
   };
 }

@@ -7,25 +7,25 @@ import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { STYLE_FAMILIES } from "@/lib/styles";
 import { AI_DISCLOSURE_TEXT } from "@/lib/disclosure";
 import {
-  STARTER_PRICE,
-  STARTER_ORIGINAL_PRICE,
-  ADD_STYLE_PRICE,
-  PREMIUM_PRICE,
+  RENDER_PRICE,
+  TIER_LABELS,
+  TIER_DESCRIPTIONS,
   LOGO_PRICE,
   PREMIUM_CHAR_LIMIT,
   HOUSE_PHOTO_MAX_MB,
   LOGO_MAX_MB,
   EXTRA_LABELS,
-  EXTRA_STARTER_BUNDLE_PRICE,
-  EXTRA_ADDITIONAL_STYLE_PRICE,
+  EXTRA_PRICE,
   SEASON_OPTIONS,
   HOLIDAY_OPTIONS,
   STRUCTURAL_BREAKDOWN_LABEL,
   STRUCTURAL_BREAKDOWN_PRICE,
   type ExtraKey,
+  type RenderTier,
 } from "@/lib/pricing";
 
 const EXTRA_KEYS: ExtraKey[] = ["night", "seasonal", "holiday"];
+const RENDER_TIERS: RenderTier[] = ["self_directed", "curated", "premium"];
 
 type Step =
   | "form"
@@ -36,9 +36,11 @@ type Step =
   | "payment-success"
   | "payment-cancelled";
 
-type AdditionalStyle = {
+type RenderItem = {
   id: string;
-  styleName: string;
+  tier: RenderTier;
+  styleName: string; // self_directed only
+  customText: string; // premium only
   extras: Record<ExtraKey, boolean>;
   seasonChoice: string;
   holidayChoice: string;
@@ -144,24 +146,11 @@ function StartPageInner() {
   const [hoaAnswer, setHoaAnswer] = useState("");
   const [historicDistrictAnswer, setHistoricDistrictAnswer] = useState("");
 
-  const [starterExtras, setStarterExtras] =
-    useState<Record<ExtraKey, boolean>>(emptyExtras());
-  const [starterSeasonChoice, setStarterSeasonChoice] = useState("");
-  const [starterHolidayChoice, setStarterHolidayChoice] = useState("");
-  const [starterBreakdown, setStarterBreakdown] = useState(false);
-
-  const [additionalStyles, setAdditionalStyles] = useState<AdditionalStyle[]>(
-    []
-  );
-
-  const [premiumEnabled, setPremiumEnabled] = useState(false);
-  const [premiumText, setPremiumText] = useState("");
+  const [renderItems, setRenderItems] = useState<RenderItem[]>([]);
 
   const [logo, setLogo] = useState<File | null>(null);
   const [logoName, setLogoName] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
-
-  const premiumCharCount = premiumText.length;
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
@@ -227,16 +216,14 @@ function StartPageInner() {
     setLogoName(file ? file.name : null);
   }
 
-  function handlePremiumTextChange(text: string) {
-    setPremiumText(text.slice(0, PREMIUM_CHAR_LIMIT));
-  }
-
-  function addStyleRow() {
-    setAdditionalStyles((rows) => [
+  function addRenderRow(tier: RenderTier) {
+    setRenderItems((rows) => [
       ...rows,
       {
         id: crypto.randomUUID(),
+        tier,
         styleName: "",
+        customText: "",
         extras: emptyExtras(),
         seasonChoice: "",
         holidayChoice: "",
@@ -245,18 +232,26 @@ function StartPageInner() {
     ]);
   }
 
-  function removeStyleRow(id: string) {
-    setAdditionalStyles((rows) => rows.filter((r) => r.id !== id));
+  function removeRenderRow(id: string) {
+    setRenderItems((rows) => rows.filter((r) => r.id !== id));
   }
 
-  function updateStyleRow(id: string, styleName: string) {
-    setAdditionalStyles((rows) =>
+  function updateRowStyleName(id: string, styleName: string) {
+    setRenderItems((rows) =>
       rows.map((r) => (r.id === id ? { ...r, styleName } : r))
     );
   }
 
-  function toggleStyleExtra(id: string, key: ExtraKey) {
-    setAdditionalStyles((rows) =>
+  function updateRowCustomText(id: string, text: string) {
+    setRenderItems((rows) =>
+      rows.map((r) =>
+        r.id === id ? { ...r, customText: text.slice(0, PREMIUM_CHAR_LIMIT) } : r
+      )
+    );
+  }
+
+  function toggleRowExtra(id: string, key: ExtraKey) {
+    setRenderItems((rows) =>
       rows.map((r) =>
         r.id === id
           ? { ...r, extras: { ...r.extras, [key]: !r.extras[key] } }
@@ -266,52 +261,39 @@ function StartPageInner() {
   }
 
   function updateRowSeasonChoice(id: string, value: string) {
-    setAdditionalStyles((rows) =>
+    setRenderItems((rows) =>
       rows.map((r) => (r.id === id ? { ...r, seasonChoice: value } : r))
     );
   }
 
   function updateRowHolidayChoice(id: string, value: string) {
-    setAdditionalStyles((rows) =>
+    setRenderItems((rows) =>
       rows.map((r) => (r.id === id ? { ...r, holidayChoice: value } : r))
     );
   }
 
   function toggleRowBreakdown(id: string) {
-    setAdditionalStyles((rows) =>
+    setRenderItems((rows) =>
       rows.map((r) => (r.id === id ? { ...r, breakdown: !r.breakdown } : r))
     );
   }
 
   const lineItems = useMemo(() => {
-    const items: { label: string; amount: number }[] = [
-      { label: "Starter Package", amount: STARTER_PRICE },
-    ];
+    const items: { label: string; amount: number }[] = [];
 
-    for (const key of EXTRA_KEYS) {
-      if (starterExtras[key]) {
-        items.push({
-          label: `${EXTRA_LABELS[key]} — all 3 Starter renders`,
-          amount: EXTRA_STARTER_BUNDLE_PRICE[key],
-        });
-      }
-    }
+    renderItems.forEach((row, i) => {
+      const tierLabel = TIER_LABELS[row.tier];
+      const name =
+        row.tier === "self_directed"
+          ? row.styleName || `${tierLabel} render #${i + 1}`
+          : `${tierLabel} render #${i + 1}`;
+      items.push({ label: name, amount: RENDER_PRICE[row.tier] });
 
-    if (starterBreakdown) {
-      items.push({
-        label: `${STRUCTURAL_BREAKDOWN_LABEL} — all 3 Starter renders`,
-        amount: STRUCTURAL_BREAKDOWN_PRICE * 3,
-      });
-    }
-
-    additionalStyles.forEach((row, i) => {
-      const name = row.styleName || `Additional style #${i + 1}`;
-      items.push({ label: name, amount: ADD_STYLE_PRICE });
       for (const key of EXTRA_KEYS) {
         if (row.extras[key]) {
           items.push({
             label: `${EXTRA_LABELS[key]} — ${name}`,
-            amount: EXTRA_ADDITIONAL_STYLE_PRICE[key],
+            amount: EXTRA_PRICE,
           });
         }
       }
@@ -323,18 +305,22 @@ function StartPageInner() {
       }
     });
 
-    if (premiumEnabled) {
-      items.push({ label: "Premium Custom Style", amount: PREMIUM_PRICE });
-    }
-
     if (logo) {
       items.push({ label: "Add Your Logo", amount: LOGO_PRICE });
     }
 
     return items;
-  }, [starterExtras, starterBreakdown, additionalStyles, premiumEnabled, logo]);
+  }, [renderItems, logo]);
 
   const total = lineItems.reduce((sum, i) => sum + i.amount, 0);
+
+  const renderItemsValid =
+    renderItems.length > 0 &&
+    renderItems.every((row) => {
+      if (row.tier === "self_directed") return !!row.styleName;
+      if (row.tier === "premium") return !!row.customText.trim();
+      return true; // curated has nothing to fill in up front
+    });
 
   async function handleContinueFromForm() {
     setCreatingOrder(true);
@@ -347,26 +333,17 @@ function StartPageInner() {
         historicDistrictAnswer,
         gatePassed,
         gateReason,
-        starter: {
-          night: starterExtras.night,
-          seasonal: starterExtras.seasonal,
-          seasonChoice: starterSeasonChoice,
-          holiday: starterExtras.holiday,
-          holidayChoice: starterHolidayChoice,
-          breakdown: starterBreakdown,
-        },
-        additionalStyles: additionalStyles.map((row) => ({
-          styleName: row.styleName,
+        renderItems: renderItems.map((row) => ({
+          tier: row.tier,
+          styleName: row.tier === "self_directed" ? row.styleName : undefined,
+          customText: row.tier === "premium" ? row.customText : undefined,
           night: row.extras.night,
           seasonal: row.extras.seasonal,
           seasonChoice: row.seasonChoice,
           holiday: row.extras.holiday,
           holidayChoice: row.holidayChoice,
           breakdown: row.breakdown,
-          unitPrice: ADD_STYLE_PRICE,
         })),
-        premiumEnabled,
-        premiumText,
         logoSelected: !!logo,
         total,
       };
@@ -664,9 +641,9 @@ function StartPageInner() {
         <div className="eyebrow">Start Your Order</div>
         <h1>Upload Your Photo &amp; Build Your Order</h1>
         <p>
-          Your Starter Package is included automatically. Add extra styles,
-          seasonal touches, a custom premium request, or your own logo below
-          — all at once.
+          Upload one photo, then add however many renders you want in each
+          tier — mix Self-Directed, Curated, and Premium freely, plus
+          seasonal touches or your own logo, all at once.
         </p>
       </div>
 
@@ -750,295 +727,165 @@ function StartPageInner() {
             </select>
           </div>
 
-          {/* ---------------- STARTER PACKAGE ---------------- */}
-          <div className="cfg-card">
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "6px",
-              }}
-            >
-              <h2 style={{ marginBottom: 0 }}>Starter Package</h2>
-              <span className="cfg-included">
-                Included — <span className="cfg-price-was">{money(STARTER_ORIGINAL_PRICE)}</span>{" "}
-                {money(STARTER_PRICE)}
-              </span>
-            </div>
-            <p className="cfg-sub">
-              3 professional visualizations, in styles our team hand-picks
-              for your specific home and neighborhood — always included.
-            </p>
-
-            <p
-              className="cfg-sub"
-              style={{ fontWeight: 600, color: "var(--white)", marginBottom: "4px" }}
-            >
-              Want a themed look across your Starter renders?
-            </p>
-            <p className="cfg-sub" style={{ marginTop: 0 }}>
-              This transforms your same 3 Starter images into night, seasonal,
-              or holiday versions — it doesn&apos;t add extra renders.
-              Selecting one now applies it to all 3, before you&apos;ve even
-              seen which styles you&apos;ll get, at a bundled rate. Prefer to
-              apply it to just one specific render instead? You can always do
-              that later, once you&apos;ve received your 3 curated images, at
-              the regular single-render price.
-            </p>
-
-            {EXTRA_KEYS.map((key) => (
-              <Fragment key={key}>
-                <div className="cfg-extra">
-                  <input
-                    type="checkbox"
-                    id={`starter-${key}`}
-                    checked={starterExtras[key]}
-                    onChange={() =>
-                      setStarterExtras((s) => ({ ...s, [key]: !s[key] }))
-                    }
-                  />
-                  <label htmlFor={`starter-${key}`}>
-                    <div className="cfg-extra-name">{EXTRA_LABELS[key]}</div>
-                    <div className="cfg-extra-note">Applies to all 3 Starter renders</div>
-                  </label>
-                  <div className="cfg-extra-price">
-                    {money(EXTRA_STARTER_BUNDLE_PRICE[key])}
-                  </div>
+          {/* ---------------- RENDER TIERS ---------------- */}
+          {RENDER_TIERS.map((tier) => {
+            const rows = renderItems.filter((r) => r.tier === tier);
+            return (
+              <div className="cfg-card" key={tier}>
+                <div className="cfg-tier-head">
+                  <h2>{TIER_LABELS[tier]}</h2>
+                  <span className="cfg-tier-price">
+                    {money(RENDER_PRICE[tier])}
+                    <span className="cfg-tier-unit"> / render</span>
+                  </span>
                 </div>
+                <p className="cfg-sub">{TIER_DESCRIPTIONS[tier]}</p>
 
-                {key === "seasonal" && starterExtras.seasonal && (
-                  <select
-                    className="cfg-sub-select"
-                    value={starterSeasonChoice}
-                    onChange={(e) => setStarterSeasonChoice(e.target.value)}
-                  >
-                    <option value="">Choose a season&hellip;</option>
-                    {SEASON_OPTIONS.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label} — {s.description}
-                      </option>
+                {rows.map((row, i) => (
+                  <div className="cfg-style-row" key={row.id}>
+                    <div className="cfg-style-row-head">
+                      {tier === "self_directed" && (
+                        <select
+                          value={row.styleName}
+                          onChange={(e) => updateRowStyleName(row.id, e.target.value)}
+                        >
+                          <option value="">Select a style&hellip;</option>
+                          {STYLE_FAMILIES.map((fam) => (
+                            <optgroup key={fam.family} label={fam.family}>
+                              {fam.styles.map((s) => (
+                                <option key={s} value={s}>
+                                  {s}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      )}
+                      {tier === "curated" && (
+                        <div className="cfg-sub" style={{ margin: 0 }}>
+                          Curated render #{i + 1} — we&apos;ll pick the style
+                          for you once your photo&apos;s been analyzed.
+                        </div>
+                      )}
+                      {tier === "premium" && (
+                        <div className="cfg-sub" style={{ margin: 0 }}>
+                          Premium render #{i + 1}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="cfg-remove"
+                        onClick={() => removeRenderRow(row.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+
+                    {tier === "self_directed" && row.styleName && (
+                      <StyleDescription styleName={row.styleName} />
+                    )}
+
+                    {tier === "premium" && (
+                      <>
+                        <textarea
+                          className="cfg-textarea"
+                          value={row.customText}
+                          onChange={(e) => updateRowCustomText(row.id, e.target.value)}
+                          placeholder="Describe the specific style, era, or details you want..."
+                        />
+                        <div
+                          className={`cfg-word-count${
+                            row.customText.length >= PREMIUM_CHAR_LIMIT ? " cfg-word-warn" : ""
+                          }`}
+                        >
+                          {row.customText.length} / {PREMIUM_CHAR_LIMIT} characters
+                        </div>
+                        <div className="cfg-warning">
+                          Heads up: very extensive or highly detailed requests
+                          can be harder to render faithfully — the more
+                          specific and layered the description, the more
+                          likely some details drift from exactly what you
+                          pictured.
+                        </div>
+                      </>
+                    )}
+
+                    {EXTRA_KEYS.map((key) => (
+                      <Fragment key={key}>
+                        <div className="cfg-extra">
+                          <input
+                            type="checkbox"
+                            id={`row-${row.id}-${key}`}
+                            checked={row.extras[key]}
+                            onChange={() => toggleRowExtra(row.id, key)}
+                          />
+                          <label htmlFor={`row-${row.id}-${key}`}>
+                            <div className="cfg-extra-name">{EXTRA_LABELS[key]}</div>
+                            <div className="cfg-extra-note">Applies to this render only</div>
+                          </label>
+                          <div className="cfg-extra-price">{money(EXTRA_PRICE)}</div>
+                        </div>
+
+                        {key === "seasonal" && row.extras.seasonal && (
+                          <select
+                            className="cfg-sub-select"
+                            value={row.seasonChoice}
+                            onChange={(e) => updateRowSeasonChoice(row.id, e.target.value)}
+                          >
+                            <option value="">Choose a season&hellip;</option>
+                            {SEASON_OPTIONS.map((s) => (
+                              <option key={s.value} value={s.value}>
+                                {s.label} — {s.description}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+
+                        {key === "holiday" && row.extras.holiday && (
+                          <select
+                            className="cfg-sub-select"
+                            value={row.holidayChoice}
+                            onChange={(e) => updateRowHolidayChoice(row.id, e.target.value)}
+                          >
+                            <option value="">Choose a holiday&hellip;</option>
+                            {HOLIDAY_OPTIONS.map((h) => (
+                              <option key={h} value={h}>
+                                {h}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </Fragment>
                     ))}
-                  </select>
-                )}
 
-                {key === "holiday" && starterExtras.holiday && (
-                  <select
-                    className="cfg-sub-select"
-                    value={starterHolidayChoice}
-                    onChange={(e) => setStarterHolidayChoice(e.target.value)}
-                  >
-                    <option value="">Choose a holiday&hellip;</option>
-                    {HOLIDAY_OPTIONS.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </Fragment>
-            ))}
-
-            <div className="cfg-extra">
-              <input
-                type="checkbox"
-                id="starter-breakdown"
-                checked={starterBreakdown}
-                onChange={() => setStarterBreakdown((v) => !v)}
-              />
-              <label htmlFor="starter-breakdown">
-                <div className="cfg-extra-name">{STRUCTURAL_BREAKDOWN_LABEL}</div>
-                <div className="cfg-extra-note">
-                  An itemized list of what&apos;s structural vs. cosmetic, for
-                  all 3 Starter renders
-                </div>
-              </label>
-              <div className="cfg-extra-price">
-                {money(STRUCTURAL_BREAKDOWN_PRICE * 3)}
-              </div>
-            </div>
-          </div>
-
-          {/* ---------------- ADDITIONAL STYLES ---------------- */}
-          <div className="cfg-card">
-            <h2>Add Your Own Style{additionalStyles.length > 1 ? "s" : ""}</h2>
-            <p className="cfg-sub">
-              Pick any style yourself — {money(ADD_STYLE_PRICE)} each. We&apos;ll
-              tell you whether it&apos;s buildable or conceptual for your home
-              when we deliver it.
-            </p>
-
-            {additionalStyles.map((row, i) => (
-              <div className="cfg-style-row" key={row.id}>
-                <div className="cfg-style-row-head">
-                  <select
-                    value={row.styleName}
-                    onChange={(e) => updateStyleRow(row.id, e.target.value)}
-                  >
-                    <option value="">Select a style&hellip;</option>
-                    {STYLE_FAMILIES.map((fam) => (
-                      <optgroup key={fam.family} label={fam.family}>
-                        {fam.styles.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="cfg-remove"
-                    onClick={() => removeStyleRow(row.id)}
-                  >
-                    Remove
-                  </button>
-                </div>
-
-                {row.styleName && <StyleDescription styleName={row.styleName} />}
-
-                {EXTRA_KEYS.map((key) => (
-                  <Fragment key={key}>
                     <div className="cfg-extra">
                       <input
                         type="checkbox"
-                        id={`row-${row.id}-${key}`}
-                        checked={row.extras[key]}
-                        onChange={() => toggleStyleExtra(row.id, key)}
+                        id={`row-${row.id}-breakdown`}
+                        checked={row.breakdown}
+                        onChange={() => toggleRowBreakdown(row.id)}
                       />
-                      <label htmlFor={`row-${row.id}-${key}`}>
-                        <div className="cfg-extra-name">{EXTRA_LABELS[key]}</div>
+                      <label htmlFor={`row-${row.id}-breakdown`}>
+                        <div className="cfg-extra-name">{STRUCTURAL_BREAKDOWN_LABEL}</div>
                         <div className="cfg-extra-note">
-                          Applies to style #{i + 1} only
+                          An itemized list of what&apos;s structural vs. cosmetic for this render
                         </div>
                       </label>
-                      <div className="cfg-extra-price">
-                        {money(EXTRA_ADDITIONAL_STYLE_PRICE[key])}
-                      </div>
+                      <div className="cfg-extra-price">{money(STRUCTURAL_BREAKDOWN_PRICE)}</div>
                     </div>
-
-                    {key === "seasonal" && row.extras.seasonal && (
-                      <select
-                        className="cfg-sub-select"
-                        value={row.seasonChoice}
-                        onChange={(e) =>
-                          updateRowSeasonChoice(row.id, e.target.value)
-                        }
-                      >
-                        <option value="">Choose a season&hellip;</option>
-                        {SEASON_OPTIONS.map((s) => (
-                          <option key={s.value} value={s.value}>
-                            {s.label} — {s.description}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-
-                    {key === "holiday" && row.extras.holiday && (
-                      <select
-                        className="cfg-sub-select"
-                        value={row.holidayChoice}
-                        onChange={(e) =>
-                          updateRowHolidayChoice(row.id, e.target.value)
-                        }
-                      >
-                        <option value="">Choose a holiday&hellip;</option>
-                        {HOLIDAY_OPTIONS.map((h) => (
-                          <option key={h} value={h}>
-                            {h}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </Fragment>
+                  </div>
                 ))}
 
-                <div className="cfg-extra">
-                  <input
-                    type="checkbox"
-                    id={`row-${row.id}-breakdown`}
-                    checked={row.breakdown}
-                    onChange={() => toggleRowBreakdown(row.id)}
-                  />
-                  <label htmlFor={`row-${row.id}-breakdown`}>
-                    <div className="cfg-extra-name">{STRUCTURAL_BREAKDOWN_LABEL}</div>
-                    <div className="cfg-extra-note">
-                      An itemized list of what&apos;s structural vs. cosmetic
-                      for style #{i + 1}
-                    </div>
-                  </label>
-                  <div className="cfg-extra-price">
-                    {money(STRUCTURAL_BREAKDOWN_PRICE)}
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            <button type="button" className="cfg-add-btn" onClick={addStyleRow}>
-              + Add Additional Style ({money(ADD_STYLE_PRICE)})
-            </button>
-          </div>
-
-          {/* ---------------- PREMIUM ---------------- */}
-          <div className="cfg-card cfg-premium">
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "6px",
-              }}
-            >
-              <h2 style={{ marginBottom: 0 }}>Something Specific?</h2>
-              <span className="cfg-extra-price">{money(PREMIUM_PRICE)}</span>
-            </div>
-            <p className="cfg-sub">
-              Extreme-complexity requests — a Roman villa, a pagoda roof, a
-              full custom vision. Describe exactly what you want.
-            </p>
-
-            {!premiumEnabled ? (
-              <button
-                type="button"
-                className="cfg-add-btn"
-                onClick={() => setPremiumEnabled(true)}
-              >
-                + Add Premium Custom Style
-              </button>
-            ) : (
-              <>
-                <textarea
-                  value={premiumText}
-                  onChange={(e) => handlePremiumTextChange(e.target.value)}
-                  placeholder="Describe the specific style, era, or details you want..."
-                />
-                <div
-                  className={`cfg-word-count${
-                    premiumCharCount >= PREMIUM_CHAR_LIMIT ? " cfg-word-warn" : ""
-                  }`}
-                >
-                  {premiumCharCount} / {PREMIUM_CHAR_LIMIT} characters
-                </div>
-                <div className="cfg-warning">
-                  Heads up: very extensive or highly detailed requests can be
-                  harder to render faithfully — the more specific and
-                  layered the description, the more likely some details
-                  drift from exactly what you pictured.
-                </div>
                 <button
                   type="button"
-                  className="cfg-remove"
-                  style={{ marginTop: "12px" }}
-                  onClick={() => {
-                    setPremiumEnabled(false);
-                    setPremiumText("");
-                  }}
+                  className="cfg-add-btn"
+                  onClick={() => addRenderRow(tier)}
                 >
-                  Remove Premium Request
+                  + Add a {TIER_LABELS[tier]} Render ({money(RENDER_PRICE[tier])})
                 </button>
-              </>
-            )}
-          </div>
+              </div>
+            );
+          })}
 
           {/* ---------------- LOGO ---------------- */}
           <div className="cfg-card">
@@ -1092,6 +939,7 @@ function StartPageInner() {
               !propertyAddress.trim() ||
               !hoaAnswer ||
               !historicDistrictAnswer ||
+              !renderItemsValid ||
               creatingOrder
             }
             onClick={handleContinueFromForm}
@@ -1103,7 +951,9 @@ function StartPageInner() {
               ? "Upload and verify your photo above to continue."
               : !propertyAddress.trim() || !hoaAnswer || !historicDistrictAnswer
                 ? "Fill in your property details above to continue."
-                : "Next: the AI disclosure, an availability check, then secure checkout."}
+                : !renderItemsValid
+                  ? "Add at least one render above to continue."
+                  : "Next: the AI disclosure, an availability check, then secure checkout."}
           </div>
         </div>
       </div>

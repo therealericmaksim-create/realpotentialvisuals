@@ -531,6 +531,21 @@ footer .legal{ font-size: 12px; color: #6f6f6b; max-width: 600px; margin: 0 auto
 }
 .cfg-add-btn:hover{ border-color: var(--gold); }
 
+/* render-tier section headers (v0.10.0 per-render pricing) */
+.cfg-tier-head{
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px;
+}
+.cfg-tier-head h2{ margin-bottom: 0; }
+.cfg-tier-price{
+  font-family: var(--font-head); font-weight: 700; color: var(--gold); font-size: 16px; white-space: nowrap;
+}
+.cfg-tier-price .cfg-tier-unit{ font-size: 11px; color: var(--gray); font-weight: 500; }
+.cfg-textarea{
+  width: 100%; min-height: 100px; background: var(--bg-alt); color: var(--white);
+  border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px;
+  font-family: var(--font-body); font-size: 14px; line-height: 1.5; resize: vertical;
+}
+
 /* premium textarea */
 .cfg-premium textarea{
   width: 100%; min-height: 120px; background: var(--bg-alt); color: var(--white);
