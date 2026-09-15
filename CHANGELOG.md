@@ -3,6 +3,44 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.11.0 — 2026-09-15
+
+- Favicon: the RealPotential crown mark (`app/icon.png`).
+- Homepage messaging refresh: removed the "How RealPotential Works"
+  01-04 section and the entire Facebook contest section (retiring that
+  promotional funnel, not just rewording it). Replaced "The Mark"
+  section with the real AI-disclosure overlay image every delivered
+  render carries, plus copy explaining its dual purpose (quality
+  signature + honest AI-disclosure label). Pricing section renamed
+  "Simple Pricing and Process" / "Services & Addons"; each tier now
+  pairs with its own "How It Works" box, and the extras grid got a real
+  card layout. Removed the redundant "Human Curated" badge and the
+  FAQ's stale "Starter styles" wording; added two FAQs on the tier
+  system and curator style count. "Enter the Contest" replaced with an
+  unlinked "Order Now" button in the header and final CTA (intentionally
+  not wired to `/start` yet).
+- Admin: added a "Manual Order" placeholder under Orders; the staff
+  badge now shows the signed-in user's real Google profile photo when
+  available (via Cloudflare Access's identity endpoint), falling back
+  to initials.
+- Renamed every table/column specific to the current front-exterior
+  "curb appeal" analysis pipeline with a `curbappeal_` prefix —
+  `curbappeal_structure_profiles`, `curbappeal_property_structure_
+  analysis`, `curbappeal_structure_profile_design_elements`,
+  `curbappeal_property_neighborhood_reads`, `curbappeal_property_
+  regulatory_lookups`, `curbappeal_profile_style_compatibility`,
+  `curbappeal_structure_profile_style_votes`, `curbappeal_structure_
+  profile_consensus`, `curbappeal_job_style_candidates`,
+  `curbappeal_profile_style_candidates`, `curbappeal_profile_cache_
+  refresh_log`, and `orders.curbappeal_photo_key` — so future
+  `exterior_`/`interior_` order types can have their own parallel
+  tables without name collisions. Shared reference/catalog tables
+  (styles, materials, design_elements, climate_zones, etc.) were
+  deliberately left generic. Applied to production as a pure rename
+  (`migrations/0002_curbappeal_rename.sql`, no data loss) and verified
+  by running the real Phase 2 pipeline against the renamed tables
+  end-to-end before cleaning up the test run.
+
 ## v0.10.0 — 2026-09-15
 
 - Replaced the fixed $79.99 Starter Package + a la carte additional-style
