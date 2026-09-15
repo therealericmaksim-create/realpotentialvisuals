@@ -651,11 +651,13 @@ function StartPageInner() {
         <div>
           {/* ---------------- PHOTO UPLOAD ---------------- */}
           <div className="cfg-card">
-            <h2>Your Home&apos;s Photo</h2>
-            <p className="cfg-sub">
-              A clear daytime photo of the front exterior — whole house,
-              straight-on, unobstructed.
-            </p>
+            <div className="cfg-photo-intro">
+              <h2>Your Home&apos;s Photo</h2>
+              <p className="cfg-sub">
+                A clear daytime photo of the front exterior — whole house,
+                straight-on, unobstructed.
+              </p>
+            </div>
             <label className="cfg-drop">
               <input
                 type="file"
@@ -728,6 +730,7 @@ function StartPageInner() {
           </div>
 
           {/* ---------------- RENDER TIERS ---------------- */}
+          <div className="cfg-tiers-grid">
           {RENDER_TIERS.map((tier) => {
             const rows = renderItems.filter((r) => r.tier === tier);
             return (
@@ -886,6 +889,7 @@ function StartPageInner() {
               </div>
             );
           })}
+          </div>
 
           {/* ---------------- LOGO ---------------- */}
           <div className="cfg-card">

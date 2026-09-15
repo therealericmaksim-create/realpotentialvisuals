@@ -23,13 +23,9 @@ export default function Home() {
           </p>
 
           <div className="btn-row center" style={{ justifyContent: "center" }}>
-            <a
-              href="https://www.facebook.com/share/p/1Dz3SZUTPi/"
-              className="btn btn-gold"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Enter Our Free Contest
+            {/* Not linked to /start yet */}
+            <a href="#" className="btn btn-gold">
+              Order Now
             </a>
             <a href="#pricing" className="btn btn-outline">
               See Pricing
