@@ -25,18 +25,28 @@ type GoogleMapsWindow = Window & {
 
 let mapsScriptPromise: Promise<void> | null = null;
 
+// NOTE: deliberately using the classic `callback=` param, not `loading=async`.
+// With `loading=async`, the <script> tag's own `onload` fires once the tiny
+// bootstrap loader has executed — NOT once `google.maps.places` is actually
+// populated, since that library attaches asynchronously afterward. That race
+// caused this component to silently no-op (the `!w.google?.maps?.places`
+// check below would be true) even though the library loaded successfully a
+// moment later. `callback=` only fires once `places` (named in `libraries=`)
+// is fully ready, so there's no window where the check below is a false miss.
 function loadGoogleMapsScript(apiKey: string): Promise<void> {
   const w = window as GoogleMapsWindow;
   if (w.google?.maps?.places) return Promise.resolve();
   if (mapsScriptPromise) return mapsScriptPromise;
 
   mapsScriptPromise = new Promise((resolve, reject) => {
+    const callbackName = "__rpvGoogleMapsReady";
+    (window as unknown as Record<string, () => void>)[callbackName] = () =>
+      resolve();
     const script = document.createElement("script");
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
       apiKey
-    )}&libraries=places&loading=async`;
+    )}&libraries=places&callback=${callbackName}`;
     script.async = true;
-    script.onload = () => resolve();
     script.onerror = () => reject(new Error("Failed to load Google Maps script"));
     document.head.appendChild(script);
   });
@@ -83,8 +93,11 @@ export default function AddressAutocomplete({
           setAutocompleteReady(true);
         });
       })
-      .catch(() => {
-        // Fails open — plain text input below still works fine.
+      .catch((err) => {
+        // Fails open — plain text input below still works fine — but log
+        // so a real misconfiguration (bad key, referrer restriction,
+        // billing) is visible in devtools instead of silently invisible.
+        console.warn("Address autocomplete unavailable:", err);
       });
 
     return () => {
