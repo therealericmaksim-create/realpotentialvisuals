@@ -12,6 +12,8 @@ interface __BaseEnv_CloudflareEnv {
 	OPENAI_API_KEY: string;
 	RESEND_API_KEY?: string;
 	GOOGLE_MAPS_API_KEY?: string;
+	CF_ACCESS_TEAM_DOMAIN?: string;
+	CF_ACCESS_AUD?: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {

@@ -1,16 +1,18 @@
+import Link from "next/link";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getCurrentStaff } from "@/lib/currentStaff";
+import { hasRole } from "@/lib/staffAuth";
 
 // Reads D1 at request time — must never be statically prerendered.
 export const dynamic = "force-dynamic";
 
-// Placeholder landing page for the admin backend (admin.realpotentialvisuals.com).
-// Access control lives in Cloudflare Access in front of this Worker, not
-// here — see middleware.ts. This page exists mainly to prove the
-// subdomain routing and D1 binding both work before any real admin
-// feature gets built on top of it.
+// Landing page for the admin backend (admin.realpotentialvisuals.com).
+// Real authorization gate lives in app/admin/layout.tsx — by the time
+// this renders, the caller is already a confirmed active staff member.
 
 export default async function AdminHome() {
   const { env } = getCloudflareContext();
+  const staff = await getCurrentStaff();
 
   const orderCount = await env.DB.prepare(
     `SELECT COUNT(*) as n FROM orders`
@@ -21,27 +23,13 @@ export default async function AdminHome() {
   ).first<{ id: string; status: string; created_at: string }>();
 
   return (
-    <div
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        maxWidth: 640,
-        margin: "60px auto",
-        padding: "0 20px",
-        color: "#e5e5e5",
-        background: "#111",
-      }}
-    >
-      <h1 style={{ fontSize: 22 }}>RealPotential Visuals — Admin</h1>
-      <p style={{ color: "#999" }}>
-        Nothing built here yet. This page confirms the admin subdomain
-        routes correctly and can read the live database.
-      </p>
+    <div style={{ fontFamily: "system-ui, sans-serif", padding: "24px 20px" }}>
       <div
         style={{
-          marginTop: 24,
           padding: 16,
           border: "1px solid #333",
           borderRadius: 8,
+          maxWidth: 500,
         }}
       >
         <div>Total orders: {orderCount?.n ?? "—"}</div>
@@ -56,6 +44,20 @@ export default async function AdminHome() {
           </div>
         )}
       </div>
+
+      <p style={{ marginTop: 20 }}>
+        <Link href="/orders" style={{ color: "#c9a227" }}>
+          View Orders →
+        </Link>
+      </p>
+
+      {staff && hasRole(staff, "principal") && (
+        <p style={{ marginTop: 8 }}>
+          <Link href="/staff" style={{ color: "#c9a227" }}>
+            Manage Staff →
+          </Link>
+        </p>
+      )}
     </div>
   );
 }
