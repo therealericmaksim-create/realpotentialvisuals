@@ -23,7 +23,7 @@ function getJwks(teamDomain: string) {
   return jwks;
 }
 
-export type AccessIdentity = { email: string };
+export type AccessIdentity = { email: string; pictureUrl: string | null };
 
 export async function verifyAccessToken(
   token: string | null,
@@ -39,11 +39,31 @@ export async function verifyAccessToken(
       audience: aud,
     });
     const email = typeof payload.email === "string" ? payload.email : null;
-    return email ? { email } : null;
+    if (!email) return null;
+
+    return { email, pictureUrl: await fetchAccessPictureUrl(teamDomain, token) };
   } catch {
     // Invalid signature, expired, wrong audience, etc. — treat exactly
     // like "not authenticated", never surface the specific reason to the
     // client.
+    return null;
+  }
+}
+
+// The Access JWT itself only carries the claims above — the IdP's own
+// profile fields (Google's avatar photo included) come from Cloudflare's
+// separate "get identity" endpoint instead. Best-effort and non-fatal:
+// the login/authorization decision never depends on this succeeding, only
+// whether the staff badge shows a real photo or falls back to initials.
+async function fetchAccessPictureUrl(teamDomain: string, token: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://${teamDomain}/cdn-cgi/access/get-identity`, {
+      headers: { Cookie: `CF_Authorization=${token}` },
+    });
+    if (!res.ok) return null;
+    const identity = (await res.json()) as { picture?: unknown };
+    return typeof identity.picture === "string" ? identity.picture : null;
+  } catch {
     return null;
   }
 }

@@ -20,5 +20,5 @@ export async function getCurrentStaff(): Promise<StaffMember | null> {
   const identity = await verifyAccessToken(token, env);
   if (!identity) return null;
 
-  return getStaffMemberByEmail(env.DB, identity.email);
+  return getStaffMemberByEmail(env.DB, identity.email, identity.pictureUrl);
 }

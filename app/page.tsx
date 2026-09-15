@@ -67,120 +67,26 @@ export default function Home() {
       </section>
 
       {/* ======================================================================
-          CONTEST
-          ====================================================================== */}
-      <section className="contest" id="contest">
-        <div className="wrap">
-          <div className="contest-box">
-            <div className="eyebrow">Limited Time</div>
-            <h2>
-              We&apos;re Giving Away a<span className="big">FREE Starter Package</span>
-            </h2>
-            <p className="value">
-              A $99 value — three professional exterior visualizations, in
-              styles our team hand-picks for your home.
-            </p>
-
-            <div className="steps">
-              <div className="step">
-                <span className="step-num">1</span>
-                <h4>Comment</h4>
-                <p>Your home&apos;s full address, on our contest post.</p>
-              </div>
-              <div className="step">
-                <span className="step-num">2</span>
-                <h4>Attach</h4>
-                <p>
-                  A clear daytime photo of the front exterior — whole house,
-                  straight-on, unobstructed.
-                </p>
-              </div>
-              <div className="step">
-                <span className="step-num">3</span>
-                <h4>Enter</h4>
-                <p>
-                  Our curators pick one property to feature. Winner announced
-                  ~October 1st.
-                </p>
-              </div>
-            </div>
-
-            <a
-              href="https://www.facebook.com/share/p/1Dz3SZUTPi/"
-              className="btn btn-gold"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Enter Now on Facebook
-            </a>
-
-            <p className="fine">
-              No purchase necessary. Open to residents of the continental
-              United States with Google Street View coverage, 18+.{" "}
-              <a
-                href="https://www.facebook.com/share/p/1Dz3SZUTPi/"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Full rules on Facebook &rarr;
-              </a>
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ======================================================================
-          HOW IT WORKS  (the normal paid service — separate from the contest)
-          ====================================================================== */}
-      <section id="how">
-        <div className="wrap center">
-          <div className="eyebrow">The Process</div>
-          <h2>How RealPotential Works</h2>
-
-          <div className="how-grid">
-            <div className="how-card">
-              <div className="how-num">01</div>
-              <h3>Send a Photo</h3>
-              <p>A clear daytime photo of your home&apos;s front exterior.</p>
-            </div>
-            <div className="how-card">
-              <div className="how-num">02</div>
-              <h3>We Curate</h3>
-              <p>
-                Our team reviews your home&apos;s structure and neighborhood,
-                then selects styles that genuinely fit.
-              </p>
-            </div>
-            <div className="how-card">
-              <div className="how-num">03</div>
-              <h3>You Choose</h3>
-              <p>Pick from your curated styles — or ask for something custom.</p>
-            </div>
-            <div className="how-card">
-              <div className="how-num">04</div>
-              <h3>We Deliver</h3>
-              <p>Professional visualizations, typically within 1–2 business days.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ======================================================================
-          THE MARK
+          THE MARK  (the AI-disclosure overlay every delivered render carries)
           ====================================================================== */}
       <section className="mark">
         <div className="wrap mark-inner">
-          <img src="/images/logo.png" alt="RealPotential mark" />
+          <img
+            src="/images/render-overlay-ai.png"
+            alt="Human Curated, AI-Powered — Not a real photo overlay mark"
+            style={{ maxWidth: "480px", width: "100%", height: "auto" }}
+          />
           <p>
-            Every visualization is curated by a real person — someone who
-            looked at your home, chose styles that genuinely fit, and
-            reviewed the result before it reached you. The AI does the
-            rendering. A human does the judgment.
+            Every render we deliver carries this mark, stamped directly onto
+            the image itself — not buried in fine print. It&apos;s how you
+            (and anyone you show it to) can recognize a RealPotential
+            visualization on sight: a real curator selected the style, our
+            team reviewed the result before it ever reached you, and the AI
+            did the rendering. The mark does two jobs at once — it&apos;s our
+            quality signature, and it&apos;s an honest, unmissable label that
+            what you&apos;re looking at is an AI-generated visualization, not
+            an actual photograph of your home.
           </p>
-          <div className="disclosure-box">
-            Every visualization is AI-generated and human-curated. Not an
-            actual photograph.
-          </div>
         </div>
       </section>
 
@@ -327,8 +233,8 @@ export default function Home() {
       <section id="pricing">
         <div className="wrap">
           <div className="center">
-            <div className="eyebrow">Simple Pricing</div>
-            <h2>Packages &amp; Add-Ons</h2>
+            <div className="eyebrow">Simple Pricing and Process</div>
+            <h2>Services &amp; Addons</h2>
           </div>
 
           <p className="center" style={{ maxWidth: "640px", margin: "0 auto 32px" }}>
@@ -336,33 +242,69 @@ export default function Home() {
             tier — mix and match freely.
           </p>
 
-          <div className="pricing-top">
-            <div className="price-box">
-              <h3>Self-Directed</h3>
-              <div className="big-price">$29.99</div>
-              <p className="desc">
-                Per render. You pick the style yourself from our full
-                catalog — fully automated, no waiting on a curator.
-              </p>
+          <div className="pricing-tiers">
+            <div className="tier-row">
+              <div className="price-box">
+                <h3>Self-Directed</h3>
+                <div className="big-price">
+                  $29.99<span className="price-unit"> / render</span>
+                </div>
+                <p className="desc">
+                  You pick the style yourself from our full catalog — fully
+                  automated, no waiting on a curator.
+                </p>
+              </div>
+              <div className="price-box how-box">
+                <h3>How It Works</h3>
+                <ol className="how-steps">
+                  <li>Upload your photo and pick any style from our catalog.</li>
+                  <li>Your render is generated automatically — no curator wait.</li>
+                  <li>We&apos;ll tell you whether it&apos;s buildable or conceptual for your home when we deliver it.</li>
+                </ol>
+              </div>
             </div>
 
-            <div className="price-box featured">
-              <h3>Curated</h3>
-              <div className="big-price">$44.99</div>
-              <p className="desc">
-                Per render. Our team picks the style for your specific home
-                and neighborhood, backed by the same structural analysis
-                every tier gets.
-              </p>
+            <div className="tier-row">
+              <div className="price-box featured">
+                <h3>Curated</h3>
+                <div className="big-price">
+                  $44.99<span className="price-unit"> / render</span>
+                </div>
+                <p className="desc">
+                  Our team picks the style for your specific home and
+                  neighborhood, backed by the same structural analysis every
+                  tier gets.
+                </p>
+              </div>
+              <div className="price-box how-box featured">
+                <h3>How It Works</h3>
+                <ol className="how-steps">
+                  <li>Upload your photo — we analyze your home&apos;s structure and neighborhood.</li>
+                  <li>A curator selects up to 6 styles that genuinely fit, from that analysis.</li>
+                  <li>We render and review each one before it reaches you.</li>
+                </ol>
+              </div>
             </div>
 
-            <div className="price-box">
-              <h3>Premium</h3>
-              <div className="big-price">$59.99</div>
-              <p className="desc">
-                Per render. Describe exactly what you want — a specific era,
-                an unusual roofline, a full custom vision.
-              </p>
+            <div className="tier-row">
+              <div className="price-box">
+                <h3>Premium</h3>
+                <div className="big-price">
+                  $59.99<span className="price-unit"> / render</span>
+                </div>
+                <p className="desc">
+                  Describe exactly what you want — a specific era, an unusual
+                  roofline, a full custom vision.
+                </p>
+              </div>
+              <div className="price-box how-box">
+                <h3>How It Works</h3>
+                <ol className="how-steps">
+                  <li>Describe exactly what you want, in your own words.</li>
+                  <li>Our team scopes what&apos;s feasible for your home before rendering.</li>
+                  <li>Delivered with the same full quality review as every tier.</li>
+                </ol>
+              </div>
             </div>
           </div>
 
@@ -400,10 +342,6 @@ export default function Home() {
           </div>
 
           <div className="badges-row">
-            <div className="badge">
-              <b>Human Curated</b>A real person picks the styles and reviews
-              every result before delivery.
-            </div>
             <div className="badge">
               <b>1&ndash;2 Business Days</b>Timing can shift during busy
               periods — we&apos;ll always tell you where you stand.
@@ -455,10 +393,31 @@ export default function Home() {
                 Buildable styles are realistic renovations your home could
                 genuinely support. Conceptual styles are bold reimaginings
                 meant to inspire &mdash; not necessarily to build exactly as
-                shown. We label every style honestly: for your curated
-                Starter styles we tell you upfront, and for a style you pick
-                yourself, we&apos;ll tell you which one it turned out to be
-                when we deliver it.
+                shown. We label every style honestly, whether a curator
+                picked it for a Curated render or you picked it yourself for
+                a Self-Directed one.
+              </p>
+            </div>
+            <div className="faq-item">
+              <h4>What&apos;s the difference between Self-Directed, Curated, and Premium?</h4>
+              <p>
+                Self-Directed is fully automated: you pick the style
+                yourself from our catalog and it&apos;s rendered right away.
+                Curated means our team analyzes your home and neighborhood
+                and selects up to 6 styles that genuinely fit, per order.
+                Premium is a free-text custom request &mdash; describe
+                exactly what you want, and we scope and render it for you.
+                All three get the same quality review before delivery.
+              </p>
+            </div>
+            <div className="faq-item">
+              <h4>How many styles will my curator choose from?</h4>
+              <p>
+                For a Curated render, our team selects from up to 6 styles
+                per order that are matched to your home&apos;s actual
+                structure and neighborhood &mdash; not a generic list. You
+                can order more than one Curated render if you&apos;d like to
+                see additional options.
               </p>
             </div>
             <div className="faq-item">
@@ -478,15 +437,11 @@ export default function Home() {
       <section className="final-cta">
         <div className="wrap">
           <h2>See Your Home&apos;s Potential</h2>
-          <p>Enter our free contest, or message us directly on Facebook to get started.</p>
+          <p>Start your order, or message us directly on Facebook with any questions first.</p>
           <div className="btn-row center" style={{ justifyContent: "center" }}>
-            <a
-              href="https://www.facebook.com/share/p/1Dz3SZUTPi/"
-              className="btn btn-gold"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Enter the Contest
+            {/* Not linked to /start yet */}
+            <a href="#" className="btn btn-gold">
+              Order Now
             </a>
             <a
               href="https://www.facebook.com/RealPotentialVisuals"

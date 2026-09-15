@@ -3,7 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import "./admin.css";
 
-type StaffInfo = { name: string; roles: string[]; isPrincipal: boolean };
+type StaffInfo = {
+  name: string;
+  roles: string[];
+  isPrincipal: boolean;
+  pictureUrl: string | null;
+};
 
 type DashboardData = {
   awaitingAnalysis: number;
@@ -30,6 +35,7 @@ type NavGroup = {
 const NAV: NavGroup[] = [
   { key: "orders", label: "Orders", color: "var(--ops)", badge: "awaitingAnalysis", children: [
     { key: "orders-list", label: "All Orders", status: "built" },
+    { key: "orders-manual", label: "Manual Order", status: "planned" },
   ]},
   { key: "curation", label: "Curation", color: "var(--ops)", priority: 1, badge: "awaitingCuration", children: [
     { key: "curation-queue", label: "Curation Queue", status: "planned" },
@@ -155,7 +161,12 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
               </svg>
             </div>
             <div className="staff-badge">
-              <span className="avatar">{initials}</span>
+              {staff.pictureUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="avatar" src={staff.pictureUrl} alt={staff.name} />
+              ) : (
+                <span className="avatar">{initials}</span>
+              )}
               <div>
                 <div className="name">{staff.name}</div>
                 <div className="role">{(staff.roles.join(", ") || "no role").toUpperCase()}</div>

@@ -213,20 +213,11 @@ header{
 /* ======================================================================
    HOW IT WORKS
    ====================================================================== */
-.how-grid{
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px;
-  margin-top: 44px;
-}
-.how-card{ text-align: center; }
-.how-num{
-  font-family: var(--font-head); font-size: 42px; font-weight: 800;
-  color: var(--gold); opacity: .5; margin-bottom: 8px;
-}
-.how-card h3{ font-size: 17px; margin-bottom: 8px; }
-.how-card p{ font-size: 14px; color: var(--gray); }
-
-@media (max-width: 760px){ .how-grid{ grid-template-columns: 1fr 1fr; } }
-@media (max-width: 480px){ .how-grid{ grid-template-columns: 1fr; } }
+/* "How it works" boxes paired with each pricing tier — see PRICING below */
+.how-box ol.how-steps{ margin: 0; padding-left: 20px; }
+.how-box ol.how-steps li{ font-size: 14px; color: var(--gray); margin-bottom: 10px; line-height: 1.5; }
+.how-box ol.how-steps li:last-child{ margin-bottom: 0; }
+.how-box ol.how-steps li::marker{ color: var(--gold); font-weight: 700; }
 
 
 /* ======================================================================
@@ -305,10 +296,12 @@ header{
 /* ======================================================================
    PRICING
    ====================================================================== */
-.pricing-top{
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
-  margin-top: 46px;
+.pricing-tiers{ margin-top: 46px; }
+.tier-row{
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+  margin-bottom: 20px;
 }
+.tier-row:last-child{ margin-bottom: 0; }
 .price-box{
   border: 1px solid var(--line); border-radius: 6px; padding: 26px 24px;
   background: var(--panel);
@@ -320,35 +313,31 @@ header{
   margin-bottom: 14px;
 }
 .price-box .big-price{ font-size: 32px; font-weight: 800; margin-bottom: 10px; }
-.price-box .big-price .price-was{
-  font-size: 19px; font-weight: 600; color: var(--gray);
-  text-decoration: line-through; margin-right: 8px;
-}
-.price-box p.desc{ font-size: 14px; color: var(--gray); margin-bottom: 16px; }
-.price-line{
-  display: flex; justify-content: space-between; align-items: baseline;
-  padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px;
-}
-.price-line:first-of-type{ border-top: none; }
-.price-line .lbl{ color: var(--white); }
-.price-line .sub{ display:block; font-size: 12.5px; color: var(--gray); }
-.price-line .amt{ font-family: var(--font-head); font-weight: 700; color: var(--gold); white-space: nowrap; }
+.price-box .big-price .price-unit{ font-size: 14px; font-weight: 500; color: var(--gray); }
+.price-box p.desc{ font-size: 14px; color: var(--gray); margin: 0; }
+.price-box.how-box{ display: flex; flex-direction: column; justify-content: center; }
 
 .extras-row{
   margin-top: 20px; border: 1px solid var(--line); border-radius: 6px;
-  background: var(--panel); padding: 24px;
+  background: var(--panel); padding: 28px 24px;
 }
 .extras-row h3{
   font-family: var(--font-head); font-size: 13px; font-weight: 700;
   letter-spacing: .08em; text-transform: uppercase; color: var(--gold);
-  margin-bottom: 18px; text-align: center;
+  margin-bottom: 20px; text-align: center;
 }
 .extras-grid{
-  display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px;
-  text-align: center;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px;
 }
-.extra-item .amt{ font-family: var(--font-head); font-weight: 700; color: var(--gold); display: block; margin-top: 4px; }
-.extra-item .lbl{ font-size: 13px; color: var(--gray); }
+.extra-item{
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 6px; padding: 18px 14px; border-radius: 6px;
+  background: var(--bg-alt); border: 1px solid var(--line); transition: border-color .15s ease;
+}
+.extra-item:hover{ border-color: var(--gold); }
+.extra-item .amt{ font-family: var(--font-head); font-weight: 800; color: var(--gold); font-size: 17px; }
+.extra-item .lbl{ font-size: 13px; color: var(--white); font-weight: 600; }
+.extra-item .lbl .sub{ display: block; font-size: 11px; font-weight: 400; color: var(--gray); margin-top: 3px; }
 
 .badges-row{
   display: flex; justify-content: center; gap: 40px; margin-top: 34px;
@@ -357,9 +346,8 @@ header{
 .badge{ max-width: 200px; font-size: 13px; color: var(--gray); }
 .badge b{ display: block; color: var(--white); font-family: var(--font-head); font-size: 14px; margin-bottom: 4px; }
 
-@media (max-width: 900px){
-  .pricing-top{ grid-template-columns: 1fr; }
-  .extras-grid{ grid-template-columns: 1fr 1fr; }
+@media (max-width: 760px){
+  .tier-row{ grid-template-columns: 1fr; }
 }
 
 
