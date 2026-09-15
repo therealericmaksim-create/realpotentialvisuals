@@ -397,7 +397,7 @@ type OrderDetail = {
     property_address: string;
     customer_email: string | null;
     job_id: string | null;
-    photo_key: string | null;
+    curbappeal_photo_key: string | null;
   };
   analysis: { house_type: string; roof_form: string; massing_envelope: string } | null;
   consensus: {
@@ -461,9 +461,9 @@ function OrderDetailSection({
         <p>{order.customer_email ?? "no email"} — status: {order.status}</p>
       </div>
 
-      {order.photo_key && (
+      {order.curbappeal_photo_key && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img className="detail-photo" src={`/api/admin/media/${order.photo_key}`} alt="Uploaded property photo" />
+        <img className="detail-photo" src={`/api/admin/media/${order.curbappeal_photo_key}`} alt="Uploaded property photo" />
       )}
 
       {!order.job_id && (

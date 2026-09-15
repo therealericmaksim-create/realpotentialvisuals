@@ -29,7 +29,7 @@ type RenderItemInput = {
 };
 
 type CreateOrderBody = {
-  photoKey: string | null;
+  curbappealPhotoKey: string | null;
   propertyAddress: string;
   hoaAnswer: string;
   historicDistrictAnswer: string;
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
 
   await env.DB.prepare(
     `INSERT INTO orders (
-       id, status, photo_key, property_address, hoa_answer,
+       id, status, curbappeal_photo_key, property_address, hoa_answer,
        historic_district_answer, gate_passed, gate_reason,
        disclosure_accepted_at, logo_key, total_amount_cents,
        created_at, updated_at
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
   )
     .bind(
       orderId,
-      body.photoKey ?? null,
+      body.curbappealPhotoKey ?? null,
       body.propertyAddress || null,
       body.hoaAnswer || null,
       body.historicDistrictAnswer || null,

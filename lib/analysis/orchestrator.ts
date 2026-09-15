@@ -65,15 +65,15 @@ export async function runPhase2Analysis(
   const logs: AiCallLog[] = [];
 
   const order = await env.DB.prepare(
-    `SELECT o.id, o.photo_key, o.property_address, o.job_id, j.property_id
+    `SELECT o.id, o.curbappeal_photo_key, o.property_address, o.job_id, j.property_id
      FROM orders o LEFT JOIN jobs j ON j.id = o.job_id WHERE o.id = ?`
   )
     .bind(orderId)
-    .first<{ id: string; photo_key: string; property_address: string; job_id: string | null; property_id: string | null }>();
+    .first<{ id: string; curbappeal_photo_key: string; property_address: string; job_id: string | null; property_id: string | null }>();
 
   if (!order) throw new Error(`Order not found: ${orderId}`);
   if (!order.property_id) throw new Error(`Order has no linked property yet: ${orderId}`);
-  if (!order.photo_key) throw new Error(`Order has no photo: ${orderId}`);
+  if (!order.curbappeal_photo_key) throw new Error(`Order has no photo: ${orderId}`);
 
   // A curated-tier render is the only reason to run the AI vote / consensus
   // steps (18, 20) — self_directed already has its style, premium isn't
@@ -94,7 +94,7 @@ export async function runPhase2Analysis(
   }
   const climateZoneId = zoneResolution.climateZoneId;
 
-  const photoDataUrl = await imageUrlToDataUrl(env.MEDIA, order.photo_key);
+  const photoDataUrl = await imageUrlToDataUrl(env.MEDIA, order.curbappeal_photo_key);
 
   // --- Step 9: structure analysis ---
   const { result: structure, log: structureLog } = await analyzeStructure(env.OPENAI_API_KEY, photoDataUrl);
@@ -114,7 +114,7 @@ export async function runPhase2Analysis(
 
   let structureProfileId: string;
   let reused = false;
-  const existingProfile = await env.DB.prepare(`SELECT id FROM structure_profiles WHERE hash_key = ?`)
+  const existingProfile = await env.DB.prepare(`SELECT id FROM curbappeal_structure_profiles WHERE hash_key = ?`)
     .bind(hashKey)
     .first<{ id: string }>();
 
@@ -126,7 +126,7 @@ export async function runPhase2Analysis(
   } else {
     structureProfileId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO structure_profiles (
+      `INSERT INTO curbappeal_structure_profiles (
          id, hash_key, climate_zone_id, house_type, roof_pitch_bucket, roof_form,
          massing_envelope, symmetry_axis, window_ratio_bucket, foundation_visibility,
          storey_count, facade_width_ft, chimney_placement, created_at
@@ -152,7 +152,7 @@ export async function runPhase2Analysis(
   }
 
   await env.DB.prepare(
-    `INSERT INTO property_structure_analysis (
+    `INSERT INTO curbappeal_property_structure_analysis (
        id, property_id, house_type, roof_pitch_deg, foundation_visibility,
        massing_envelope, storey_count, facade_width_ft, chimney_placement,
        symmetry_axis, structure_profile_id, confidence_flag, analyzed_at
@@ -198,7 +198,7 @@ export async function runPhase2Analysis(
     if (!el) continue; // model hallucinated a slug that doesn't exist -- skip rather than guess
     detectedSlugs.add(d.design_element_slug);
     await env.DB.prepare(
-      `INSERT INTO structure_profile_design_elements (id, structure_profile_id, design_element_id, confidence)
+      `INSERT INTO curbappeal_structure_profile_design_elements (id, structure_profile_id, design_element_id, confidence)
        VALUES (?, ?, ?, ?) ON CONFLICT(structure_profile_id, design_element_id) DO UPDATE SET confidence = excluded.confidence`
     )
       .bind(crypto.randomUUID(), structureProfileId, el.id, d.confidence)
@@ -216,7 +216,7 @@ export async function runPhase2Analysis(
       );
       logs.push(neighborhoodLog);
       await env.DB.prepare(
-        `INSERT INTO property_neighborhood_reads (id, property_id, street_view_key, style_read, homes_visible, created_at)
+        `INSERT INTO curbappeal_property_neighborhood_reads (id, property_id, street_view_key, style_read, homes_visible, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`
       )
         .bind(crypto.randomUUID(), order.property_id, imageKey, neighborhood.style_read, neighborhood.homes_visible ? 1 : 0, now)
@@ -231,7 +231,7 @@ export async function runPhase2Analysis(
   const { result: regulatory, logs: regulatoryLogs } = await lookupRegulatory(env.OPENAI_API_KEY, order.property_address);
   logs.push(...regulatoryLogs);
   await env.DB.prepare(
-    `INSERT INTO property_regulatory_lookups (id, property_id, zoning_district, historic_overlay, flood_zone, summary, citations_json, looked_up_at)
+    `INSERT INTO curbappeal_property_regulatory_lookups (id, property_id, zoning_district, historic_overlay, flood_zone, summary, citations_json, looked_up_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
@@ -371,7 +371,7 @@ export async function runPhase2Analysis(
   for (let i = 0; i < compatRowsSql.length; i += CHUNK) {
     const chunk = compatRowsSql.slice(i, i + CHUNK);
     await env.DB.prepare(
-      `INSERT INTO profile_style_compatibility (
+      `INSERT INTO curbappeal_profile_style_compatibility (
          id, structure_profile_id, style_id, match_score_pct, design_element_score_pct,
          design_element_matched_required, design_element_total_required,
          design_element_matched_optional, design_element_total_optional,
@@ -403,7 +403,7 @@ export async function runPhase2Analysis(
     if (primaryStyleId) {
       aiVotes.push({ styleId: primaryStyleId, voteRank: 1, confidence: vote.primary_confidence, reasoning: vote.primary_reasoning });
       await env.DB.prepare(
-        `INSERT INTO structure_profile_style_votes (id, structure_profile_id, voter_type, style_id, vote_rank, confidence, is_abstain, reasoning, voted_at)
+        `INSERT INTO curbappeal_structure_profile_style_votes (id, structure_profile_id, voter_type, style_id, vote_rank, confidence, is_abstain, reasoning, voted_at)
          VALUES (?, ?, 'ai', ?, 1, ?, 0, ?, ?)
          ON CONFLICT(structure_profile_id, voter_type, vote_rank) DO UPDATE SET style_id = excluded.style_id, confidence = excluded.confidence`
       )
@@ -414,7 +414,7 @@ export async function runPhase2Analysis(
     if (secondaryStyleId) {
       aiVotes.push({ styleId: secondaryStyleId, voteRank: 2, confidence: vote.secondary_confidence });
       await env.DB.prepare(
-        `INSERT INTO structure_profile_style_votes (id, structure_profile_id, voter_type, style_id, vote_rank, confidence, is_abstain, voted_at)
+        `INSERT INTO curbappeal_structure_profile_style_votes (id, structure_profile_id, voter_type, style_id, vote_rank, confidence, is_abstain, voted_at)
          VALUES (?, ?, 'ai', ?, 2, ?, 0, ?)
          ON CONFLICT(structure_profile_id, voter_type, vote_rank) DO UPDATE SET style_id = excluded.style_id, confidence = excluded.confidence`
       )
@@ -425,7 +425,7 @@ export async function runPhase2Analysis(
     // --- Step 20: 2-voter blend ---
     const consensus = computeVoterConsensus(algoRows, aiVotes, styleFamilyById);
     await env.DB.prepare(
-      `INSERT INTO structure_profile_consensus (
+      `INSERT INTO curbappeal_structure_profile_consensus (
          id, structure_profile_id, primary_style_id, primary_score_pct, secondary_style_id, secondary_score_pct,
          classification_status, ai_dissented, dissent_reasoning, voter_weights_used, computed_at
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

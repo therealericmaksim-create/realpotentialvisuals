@@ -1,6 +1,6 @@
 // Step 9 (Automation Routing Sheet Phase 2): structure analysis. Unlike
 // design-element detection, this step never had a real prompt written
-// before now — structure_profiles has only ever held hand-authored test
+// before now — curbappeal_structure_profiles has only ever held hand-authored test
 // data. This is the first real version.
 
 import { callVisionJson } from "./openaiClient";

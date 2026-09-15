@@ -62,19 +62,19 @@ just homepage copy.
 - **Curation Queue** — jobs with `jobs.status` ready for curation, sorted by
   wait time
 - **Job Curation Workspace** (`/admin/job/{id}`) — the main screen:
-  - Original photo + retained Street View frame (`property_neighborhood_reads`)
-  - Structure analysis read (`property_structure_analysis`)
-  - Design elements detected (`structure_profile_design_elements`)
-  - Regulatory findings with sources (`property_regulatory_lookups`)
+  - Original photo + retained Street View frame (`curbappeal_property_neighborhood_reads`)
+  - Structure analysis read (`curbappeal_property_structure_analysis`)
+  - Design elements detected (`curbappeal_structure_profile_design_elements`)
+  - Regulatory findings with sources (`curbappeal_property_regulatory_lookups`)
   - Scored candidate styles, Buildable/Conceptual tagged
-    (`profile_style_compatibility`, `job_style_candidates`)
-  - AI/algorithm consensus (`structure_profile_consensus`)
+    (`curbappeal_profile_style_compatibility`, `curbappeal_job_style_candidates`)
+  - AI/algorithm consensus (`curbappeal_structure_profile_consensus`)
   - Build the curated 12 + pick the 3 included in Starter
     (`curations.twelve_style_ids`, `curations.included_style_ids`)
   - Submit → authorize flow (`curations.status`: submitted → authorized /
     edited / rejected; `curations.auto_approved`)
 
-Backing tables: `curations`, `job_style_candidates`, `jobs`.
+Backing tables: `curations`, `curbappeal_job_style_candidates`, `jobs`.
 Role: **curator**, sign-off from **principal** or **quality_controller**.
 
 ---

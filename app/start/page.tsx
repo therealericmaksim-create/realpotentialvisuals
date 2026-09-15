@@ -138,7 +138,7 @@ function StartPageInner() {
   const [photoStatus, setPhotoStatus] = useState<
     "idle" | "checking" | "valid" | "invalid"
   >("idle");
-  const [photoKey, setPhotoKey] = useState<string | null>(null);
+  const [curbappealPhotoKey, setCurbappealPhotoKey] = useState<string | null>(null);
   const [gatePassed, setGatePassed] = useState<boolean | null>(null);
   const [gateReason, setGateReason] = useState<string | null>(null);
 
@@ -166,7 +166,7 @@ function StartPageInner() {
 
     setPhotoError(null);
     setPhoto(file);
-    setPhotoKey(null);
+    setCurbappealPhotoKey(null);
     setPhotoStatus("checking");
     if (photoPreview) URL.revokeObjectURL(photoPreview);
     setPhotoPreview(URL.createObjectURL(file));
@@ -191,7 +191,7 @@ function StartPageInner() {
 
       if (data.valid && data.key) {
         setPhotoStatus("valid");
-        setPhotoKey(data.key);
+        setCurbappealPhotoKey(data.key);
       } else {
         setPhotoStatus("invalid");
         setPhotoError(data.reason ?? "That photo couldn't be verified.");
@@ -327,7 +327,7 @@ function StartPageInner() {
     setOrderCreateError(null);
     try {
       const payload = {
-        photoKey,
+        curbappealPhotoKey,
         propertyAddress,
         hoaAnswer,
         historicDistrictAnswer,

@@ -28,7 +28,7 @@ export const BLENDED_GAP_PCT = 8.0; // top-2 within this many points, different 
 export type ClassificationStatus = "unknown" | "blended" | "clear_match";
 
 // The algorithm's vote is dense (all styles scored) -- one row per style read
-// directly from profile_style_compatibility.combined_score_pct.
+// directly from curbappeal_profile_style_compatibility.combined_score_pct.
 export type AlgorithmVoteRow = {
   styleId: string;
   combinedScorePct: number;
@@ -70,7 +70,7 @@ function round3(value: number): number {
  * the db -- the caller persists the result, same pattern as the rest of the
  * pipeline this was ported from.
  *
- * algoRows: every profile_style_compatibility row with a non-null
+ * algoRows: every curbappeal_profile_style_compatibility row with a non-null
  * combined_score_pct for this profile, already fetched.
  * aiVotes: the AI voter's 1-2 rows for this profile, already fetched.
  * styleFamilyById: styles.family for whichever style ids show up in the top 2

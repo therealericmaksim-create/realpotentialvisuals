@@ -20,14 +20,14 @@ export async function GET() {
         .prepare(
           `SELECT COUNT(*) as n FROM orders o
            JOIN jobs j ON j.id = o.job_id
-           LEFT JOIN property_structure_analysis psa ON psa.property_id = j.property_id
+           LEFT JOIN curbappeal_property_structure_analysis psa ON psa.property_id = j.property_id
            WHERE psa.id IS NULL`
         )
         .first<{ n: number }>(),
       db
         .prepare(
           `SELECT COUNT(*) as n FROM jobs j
-           JOIN property_structure_analysis psa ON psa.property_id = j.property_id
+           JOIN curbappeal_property_structure_analysis psa ON psa.property_id = j.property_id
            LEFT JOIN curations c ON c.job_id = j.id
            WHERE c.id IS NULL`
         )

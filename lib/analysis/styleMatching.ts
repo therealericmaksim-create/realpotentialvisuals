@@ -20,7 +20,8 @@
 
 // ---------------------------------------------------------------------------
 // Ratified v1 bucket vocabulary (mirrors CHECK constraints on
-// structure_profiles / property_structure_analysis in realpotential-schema.sql).
+// curbappeal_structure_profiles / curbappeal_property_structure_analysis in
+// realpotential-schema.sql).
 // ---------------------------------------------------------------------------
 export type RoofPitchBucket =
   | "flat_0_5"
