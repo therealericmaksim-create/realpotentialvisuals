@@ -224,6 +224,18 @@ export default function Home() {
       </section>
 
       {/* ======================================================================
+          CURB APPEAL STAT
+          ====================================================================== */}
+      <section className="curb-stat">
+        <div className="wrap">
+          <img
+            src="/images/curb-appeal-stat.png"
+            alt="97% of realtors say curb appeal directly affects how buyers respond to a listing, per the National Association of Realtors. The catch: most homeowners don't know which upgrade is actually worth it until they've already paid for it. We show you first — upload one photo, see realistic styles, make confident decisions."
+          />
+        </div>
+      </section>
+
+      {/* ======================================================================
           PRICING
           ====================================================================== */}
       <section id="pricing">

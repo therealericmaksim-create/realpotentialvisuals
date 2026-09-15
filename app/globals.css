@@ -292,6 +292,15 @@ header{
 @media (max-width: 760px){ .who-grid{ grid-template-columns: 1fr 1fr; } }
 @media (max-width: 480px){ .who-grid{ grid-template-columns: 1fr; } }
 
+/* ======================================================================
+   CURB APPEAL STAT — a single self-contained marketing graphic
+   ====================================================================== */
+.curb-stat{ padding: 40px 0; }
+.curb-stat img{
+  width: 100%; height: auto; display: block;
+  border-radius: 8px; border: 1px solid var(--line);
+}
+
 
 /* ======================================================================
    PRICING
