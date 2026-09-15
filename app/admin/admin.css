@@ -38,12 +38,14 @@
 .rpv-admin .brand{font-family:var(--display);font-weight:800;font-size:16px;letter-spacing:-.02em;
   display:flex;align-items:center;gap:8px;flex:none;background:none;border:none;color:var(--text)}
 .rpv-admin .brand .dot{width:7px;height:7px;border-radius:50%;background:var(--ops)}
-.rpv-admin .search{flex:1;max-width:420px}
+.rpv-admin .search{flex:1;max-width:420px;position:relative;display:flex}
 .rpv-admin .search input{width:100%;background:var(--panel-2);border:1px solid var(--border);
-  border-radius:6px;padding:8px 12px 8px 34px;color:var(--text);font-size:13px;
-  background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="%235C646C" stroke-width="1.6"><circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5L13 13"/></svg>');
-  background-repeat:no-repeat;background-position:10px center}
+  border-radius:6px;padding:8px 34px 8px 12px;color:var(--text);font-size:13px}
 .rpv-admin .search input::placeholder{color:var(--text-faint)}
+.rpv-admin .search-btn{position:absolute;right:0;top:0;bottom:0;width:32px;display:flex;
+  align-items:center;justify-content:center;background:none;border:none;color:var(--text-dim);
+  cursor:pointer;border-radius:0 6px 6px 0}
+.rpv-admin .search-btn:hover{color:var(--text)}
 .rpv-admin .header-right{margin-left:auto;display:flex;align-items:center;gap:16px}
 
 .rpv-admin .cap-indicator{display:flex;align-items:center;gap:9px;background:var(--panel-2);
@@ -157,3 +159,15 @@
 .rpv-admin input[type=text],.rpv-admin input[type=email],.rpv-admin select{
   background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);
   padding:7px 10px;font-size:13px;font-family:inherit}
+
+/* users: role checkboxes + edit-roles modal */
+.rpv-admin .role-checkbox-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.rpv-admin .role-checkbox{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text-dim);
+  text-transform:capitalize;cursor:pointer}
+.rpv-admin .role-checkbox input{accent-color:var(--ops)}
+.rpv-admin .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;
+  align-items:center;justify-content:center;z-index:100;padding:20px}
+.rpv-admin .modal-box{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;
+  padding:24px;max-width:480px;width:100%;max-height:80vh;overflow-y:auto}
+.rpv-admin .modal-box h3{font-family:var(--display);font-size:16px;margin:0 0 4px}
+.rpv-admin .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}

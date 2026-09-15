@@ -7,7 +7,11 @@ type StaffInfo = {
   name: string;
   roles: string[];
   isPrincipal: boolean;
-  pictureUrl: string | null;
+};
+
+type IdentityProfile = {
+  staff: { name: string; email: string; roles: string[] };
+  identity: { name: string | null; email: string | null; pictureUrl: string | null } | null;
 };
 
 type DashboardData = {
@@ -62,8 +66,10 @@ const NAV: NavGroup[] = [
     { key: "finance-chargebacks", label: "Chargebacks & Disputes", status: "planned" },
     { key: "finance-payouts", label: "Contractor Payouts", status: "planned" },
   ]},
+  { key: "users", label: "Users", color: "var(--exec)", children: [
+    { key: "users-all", label: "All Users", status: "built" },
+  ]},
   { key: "settings", label: "Settings", color: "var(--exec)", priority: 6, children: [
-    { key: "settings-staff", label: "Staff & Roles", status: "built" },
     { key: "settings-pricing", label: "Pricing & Packages", status: "planned" },
     { key: "settings-disclosure", label: "Disclosure Copy Version", status: "planned" },
     { key: "settings-intake-cap", label: "Daily Intake Cap", status: "planned" },
@@ -95,6 +101,9 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
   const [section, setSection] = useState<string>("dashboard");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [identity, setIdentity] = useState<IdentityProfile["identity"]>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [orderSearch, setOrderSearch] = useState("");
 
   const loadDashboard = useCallback(() => {
     fetch("/api/admin/dashboard")
@@ -106,6 +115,17 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
+
+  // Real Google login name/photo — fetched once here (not baked into
+  // every /api/admin/* request, see lib/access.ts's header comment for
+  // why that regressed other routes). Falls back to the DB name/initials
+  // if Cloudflare Access's identity endpoint doesn't return one.
+  useEffect(() => {
+    fetch("/api/admin/me")
+      .then((r) => r.json() as Promise<IdentityProfile>)
+      .then((d) => setIdentity(d.identity))
+      .catch(() => {});
+  }, []);
 
   function toggleGroup(key: string) {
     setOpenGroup((cur) => (cur === key ? null : key));
@@ -121,7 +141,17 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
     setSection("order-detail");
   }
 
-  const initials = staff.name
+  function runSearch() {
+    // Orders is the only real, searchable dataset today — everything
+    // else in the nav is still a placeholder with nothing to search.
+    setOrderSearch(searchQuery.trim());
+    setOpenGroup("orders");
+    goTo("orders-list");
+  }
+
+  const displayName = identity?.name || staff.name;
+  const pictureUrl = identity?.pictureUrl ?? null;
+  const initials = displayName
     .split(" ")
     .map((p) => p[0])
     .join("")
@@ -138,11 +168,28 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
         <header>
           <button className="brand" onClick={() => goTo("dashboard")}>
             <span className="dot" />
-            RealPotential <span style={{ color: "var(--text-faint)", fontWeight: 500 }}>/ Admin</span>
+            RealPotential Visuals
           </button>
-          <div className="search">
-            <input type="text" placeholder="Search orders, jobs, styles…" disabled />
-          </div>
+          <form
+            className="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              runSearch();
+            }}
+          >
+            <input
+              type="text"
+              placeholder="Search orders…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <button type="submit" className="search-btn" aria-label="Search">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <circle cx="6" cy="6" r="4.5" />
+                <path d="M9.5 9.5L13 13" />
+              </svg>
+            </button>
+          </form>
           <div className="header-right">
             <div className="cap-indicator" title="Today's intake vs. daily cap">
               <span className="lbl">Intake</span>
@@ -161,14 +208,14 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
               </svg>
             </div>
             <div className="staff-badge">
-              {staff.pictureUrl ? (
+              {pictureUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img className="avatar" src={staff.pictureUrl} alt={staff.name} />
+                <img className="avatar" src={pictureUrl} alt={displayName} />
               ) : (
                 <span className="avatar">{initials}</span>
               )}
               <div>
-                <div className="name">{staff.name}</div>
+                <div className="name">{displayName}</div>
                 <div className="role">{(staff.roles.join(", ") || "no role").toUpperCase()}</div>
               </div>
             </div>
@@ -226,12 +273,18 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
 
         <main>
           {section === "dashboard" && <DashboardSection dashboard={dashboard} onNavigate={goTo} />}
-          {section === "orders-list" && <OrdersListSection onOpenOrder={openOrder} />}
+          {section === "orders-list" && (
+            <OrdersListSection
+              onOpenOrder={openOrder}
+              initialQuery={orderSearch}
+              onQueryConsumed={() => setOrderSearch("")}
+            />
+          )}
           {section === "order-detail" && selectedOrderId && (
             <OrderDetailSection orderId={selectedOrderId} onBack={() => goTo("orders-list")} onRan={loadDashboard} />
           )}
-          {section === "settings-staff" && <StaffSection isPrincipal={staff.isPrincipal} />}
-          {!["dashboard", "orders-list", "order-detail", "settings-staff"].includes(section) && (
+          {section === "users-all" && <UsersSection isPrincipal={staff.isPrincipal} />}
+          {!["dashboard", "orders-list", "order-detail", "users-all"].includes(section) && (
             <PlaceholderSection sectionKey={section} />
           )}
         </main>
@@ -339,9 +392,18 @@ type OrderListRow = {
   created_at: string;
 };
 
-function OrdersListSection({ onOpenOrder }: { onOpenOrder: (id: string) => void }) {
+function OrdersListSection({
+  onOpenOrder,
+  initialQuery,
+  onQueryConsumed,
+}: {
+  onOpenOrder: (id: string) => void;
+  initialQuery: string;
+  onQueryConsumed: () => void;
+}) {
   const [orders, setOrders] = useState<OrderListRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState(initialQuery);
 
   useEffect(() => {
     fetch("/api/admin/orders")
@@ -349,6 +411,28 @@ function OrdersListSection({ onOpenOrder }: { onOpenOrder: (id: string) => void 
       .then((d) => setOrders(d.orders ?? []))
       .catch(() => setError("Failed to load orders."));
   }, []);
+
+  // Adopt a query the header search bar just ran, then let local edits
+  // (typing in the box below) take over from there.
+  useEffect(() => {
+    if (initialQuery) {
+      setQuery(initialQuery);
+      onQueryConsumed();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
+
+  const q = query.trim().toLowerCase();
+  const filtered =
+    orders && q
+      ? orders.filter(
+          (o) =>
+            o.id.toLowerCase().includes(q) ||
+            (o.property_address ?? "").toLowerCase().includes(q) ||
+            (o.customer_email ?? "").toLowerCase().includes(q) ||
+            o.status.toLowerCase().includes(q)
+        )
+      : orders;
 
   return (
     <>
@@ -358,10 +442,19 @@ function OrdersListSection({ onOpenOrder }: { onOpenOrder: (id: string) => void 
         <p>Every order placed, most recent first.</p>
       </div>
       <div className="section-block">
+        <input
+          type="text"
+          placeholder="Filter by address, email, status, or order id…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ marginBottom: 16, maxWidth: 420 }}
+        />
         {error && <p className="error-text">{error}</p>}
         {!orders && !error && <p className="loading">Loading…</p>}
-        {orders && orders.length === 0 && <p className="loading">No orders yet.</p>}
-        {orders && orders.length > 0 && (
+        {filtered && filtered.length === 0 && (
+          <p className="loading">{q ? "No orders match that search." : "No orders yet."}</p>
+        )}
+        {filtered && filtered.length > 0 && (
           <table className="data">
             <thead>
               <tr>
@@ -373,7 +466,7 @@ function OrdersListSection({ onOpenOrder }: { onOpenOrder: (id: string) => void 
               </tr>
             </thead>
             <tbody>
-              {orders.map((o) => (
+              {filtered.map((o) => (
                 <tr key={o.id} className="clickable" onClick={() => onOpenOrder(o.id)}>
                   <td>{o.id.slice(0, 8)}</td>
                   <td><span className="pill">{o.status}</span></td>
@@ -546,12 +639,89 @@ const ALL_ROLES = [
   "prompt_engineer", "bookkeeper", "compliance_officer",
 ];
 
-function StaffSection({ isPrincipal }: { isPrincipal: boolean }) {
+function RoleCheckboxes({
+  selected,
+  onChange,
+}: {
+  selected: Set<string>;
+  onChange: (role: string, checked: boolean) => void;
+}) {
+  return (
+    <div className="role-checkbox-grid">
+      {ALL_ROLES.map((r) => (
+        <label key={r} className="role-checkbox">
+          <input
+            type="checkbox"
+            checked={selected.has(r)}
+            onChange={(e) => onChange(r, e.target.checked)}
+          />
+          {r.replace(/_/g, " ")}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function EditRolesModal({
+  user,
+  onClose,
+  onSaved,
+}: {
+  user: StaffMemberRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(user.roles.map((r) => r.name)));
+  const [saving, setSaving] = useState(false);
+
+  function toggle(role: string, checked: boolean) {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (checked) next.add(role);
+      else next.delete(role);
+      return next;
+    });
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await fetch(`/api/admin/staff/${user.id}/roles`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roles: [...selected] }),
+      });
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <h3>Edit Roles</h3>
+        <p className="note">{user.name} — {user.email}</p>
+        <RoleCheckboxes selected={selected} onChange={toggle} />
+        <div className="modal-actions">
+          <button className="cfg-remove" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn-primary" type="button" onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UsersSection({ isPrincipal }: { isPrincipal: boolean }) {
   const [list, setList] = useState<StaffMemberRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [newName, setNewName] = useState("");
+  const [editingUser, setEditingUser] = useState<StaffMemberRow | null>(null);
   const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState(ALL_ROLES[0]);
+  const [newRoles, setNewRoles] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
 
   const load = useCallback(() => {
     fetch("/api/admin/staff")
@@ -560,7 +730,7 @@ function StaffSection({ isPrincipal }: { isPrincipal: boolean }) {
         return r.json() as Promise<{ staff: StaffMemberRow[] }>;
       })
       .then((d) => setList(d.staff ?? []))
-      .catch(() => setError("Failed to load staff — principal access required."));
+      .catch(() => setError("Failed to load users — principal access required."));
   }, []);
 
   useEffect(() => {
@@ -571,23 +741,9 @@ function StaffSection({ isPrincipal }: { isPrincipal: boolean }) {
     return (
       <div className="section-block">
         <h3>Not Authorized</h3>
-        <p className="note">Only the Principal can manage staff.</p>
+        <p className="note">Only the Principal can manage users.</p>
       </div>
     );
-  }
-
-  async function addRole(staffId: string, role: string) {
-    await fetch(`/api/admin/staff/${staffId}/roles`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role }),
-    });
-    load();
-  }
-
-  async function revokeRole(staffRoleId: string) {
-    await fetch(`/api/admin/staff/roles/${staffRoleId}`, { method: "DELETE" });
-    load();
   }
 
   async function deactivate(staffId: string) {
@@ -595,85 +751,123 @@ function StaffSection({ isPrincipal }: { isPrincipal: boolean }) {
     load();
   }
 
-  async function addStaff(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newName.trim() || !newEmail.trim()) return;
-    await fetch("/api/admin/staff", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName, email: newEmail, role: newRole }),
-    });
-    setNewName("");
-    setNewEmail("");
+  async function deleteUser(user: StaffMemberRow) {
+    if (!window.confirm(`Permanently delete ${user.email}? This can't be undone.`)) return;
+    await fetch(`/api/admin/staff/${user.id}`, { method: "DELETE" });
     load();
+  }
+
+  async function addUser(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newEmail.trim()) return;
+    setAdding(true);
+    try {
+      await fetch("/api/admin/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: newEmail, roles: [...newRoles] }),
+      });
+      setNewEmail("");
+      setNewRoles(new Set());
+      load();
+    } finally {
+      setAdding(false);
+    }
   }
 
   return (
     <>
       <div className="page-head">
-        <div className="eyebrow">Settings</div>
-        <h1>Staff &amp; Roles</h1>
-        <p>Principal-only. Manage who&apos;s on staff and what they&apos;re allowed to do.</p>
+        <div className="eyebrow">Users</div>
+        <h1>All Users</h1>
+        <p>Principal-only. Everyone with access to this admin platform, and what they&apos;re allowed to do.</p>
       </div>
 
       {error && <p className="error-text">{error}</p>}
 
       <div className="section-block">
-        {(list ?? []).map((s) => (
-          <div key={s.id} className="empty-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-              <div>
-                <strong style={{ color: "var(--text)" }}>{s.name}</strong>{" "}
-                <span style={{ color: "var(--text-dim)" }}>{s.email}</span>
-                {!s.active && <span className="error-text"> (deactivated)</span>}
-              </div>
-              {!!s.active && (
-                <button className="stat-link" onClick={() => deactivate(s.id)}>Deactivate</button>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {s.roles.map((r) => (
-                <button key={r.staffRoleId} className="role-chip" onClick={() => revokeRole(r.staffRoleId)} title="Click to revoke">
-                  {r.name} ×
-                </button>
-              ))}
-            </div>
-            {!!s.active && (
-              <form
-                className="inline"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const form = e.target as HTMLFormElement;
-                  const select = form.elements.namedItem("role");
-                  const role = select instanceof HTMLSelectElement ? select.value : "";
-                  if (role) addRole(s.id, role);
-                }}
-              >
-                <select name="role" defaultValue={ALL_ROLES[0]}>
-                  {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-                <button className="stat-link" type="submit">+ Add Role</button>
-              </form>
-            )}
-          </div>
-        ))}
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Roles</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {(list ?? []).map((s) => (
+              <tr key={s.id}>
+                <td>
+                  {s.name}
+                  {!s.active && <span className="error-text"> (deactivated)</span>}
+                </td>
+                <td>{s.email}</td>
+                <td>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {s.roles.length === 0 && <span className="note">no roles</span>}
+                    {s.roles.map((r) => (
+                      <span key={r.staffRoleId} className="role-chip" style={{ cursor: "default" }}>
+                        {r.name}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  <button className="stat-link" onClick={() => setEditingUser(s)}>Edit Roles</button>
+                  {" · "}
+                  {!!s.active && (
+                    <>
+                      <button className="stat-link" onClick={() => deactivate(s.id)}>Deactivate</button>
+                      {" · "}
+                    </>
+                  )}
+                  <button className="stat-link" style={{ color: "var(--leg)" }} onClick={() => deleteUser(s)}>
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <div className="section-block">
-        <h3>Add Staff</h3>
-        <form className="inline" onSubmit={addStaff}>
-          <input type="text" placeholder="Full name" value={newName} onChange={(e) => setNewName(e.target.value)} required />
-          <input type="email" placeholder="Gmail address" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
-          <select value={newRole} onChange={(e) => setNewRole(e.target.value)}>
-            {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <button className="btn-primary" type="submit">Add</button>
-        </form>
-        <p className="note" style={{ marginTop: 10 }}>
-          The Gmail address must sign in through Access before anything else works for them — adding them here only
-          grants what they can do once they do.
+        <h3>Add User</h3>
+        <p className="note">
+          Just their Gmail address, and whichever roles they should start with — submitting sends them an invite
+          email. They still have to sign in through Cloudflare Access with that exact Google account before
+          anything here takes effect.
         </p>
+        <form onSubmit={addUser}>
+          <input
+            type="email"
+            placeholder="Gmail address"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            required
+            style={{ marginBottom: 12, maxWidth: 320 }}
+          />
+          <RoleCheckboxes
+            selected={newRoles}
+            onChange={(role, checked) =>
+              setNewRoles((cur) => {
+                const next = new Set(cur);
+                if (checked) next.add(role);
+                else next.delete(role);
+                return next;
+              })
+            }
+          />
+          <button className="btn-primary" type="submit" disabled={adding} style={{ marginTop: 14 }}>
+            {adding ? "Sending Invite…" : "Add User & Send Invite"}
+          </button>
+        </form>
       </div>
+
+      {editingUser && (
+        <EditRolesModal user={editingUser} onClose={() => setEditingUser(null)} onSaved={load} />
+      )}
     </>
   );
 }

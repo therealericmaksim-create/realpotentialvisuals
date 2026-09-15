@@ -9,6 +9,15 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 // a broken/unconfigured check here must deny access, not skip a nice-to-
 // have. Never copy the "fail open" pattern from lib/openai.ts or
 // lib/email.ts onto this file.
+//
+// Deliberately fast — no extra network calls beyond JWKS (module-cached).
+// getCurrentStaff() calls this on EVERY admin page/API request, so an
+// earlier version that also fetched Cloudflare's get-identity endpoint
+// here made every single request pay for a second round-trip, which was
+// slow/flaky enough to intermittently fail plain page loads (e.g.
+// /api/admin/orders). The identity-profile fetch (name/picture) now lives
+// in getAccessIdentityProfile() below, called only by /api/admin/me —
+// once per admin session, not once per request.
 
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 let jwksTeamDomain: string | null = null;
@@ -23,7 +32,7 @@ function getJwks(teamDomain: string) {
   return jwks;
 }
 
-export type AccessIdentity = { email: string; pictureUrl: string | null };
+export type AccessIdentity = { email: string };
 
 export async function verifyAccessToken(
   token: string | null,
@@ -39,9 +48,7 @@ export async function verifyAccessToken(
       audience: aud,
     });
     const email = typeof payload.email === "string" ? payload.email : null;
-    if (!email) return null;
-
-    return { email, pictureUrl: await fetchAccessPictureUrl(teamDomain, token) };
+    return email ? { email } : null;
   } catch {
     // Invalid signature, expired, wrong audience, etc. — treat exactly
     // like "not authenticated", never surface the specific reason to the
@@ -50,19 +57,37 @@ export async function verifyAccessToken(
   }
 }
 
-// The Access JWT itself only carries the claims above — the IdP's own
-// profile fields (Google's avatar photo included) come from Cloudflare's
-// separate "get identity" endpoint instead. Best-effort and non-fatal:
-// the login/authorization decision never depends on this succeeding, only
-// whether the staff badge shows a real photo or falls back to initials.
-async function fetchAccessPictureUrl(teamDomain: string, token: string): Promise<string | null> {
+export type AccessIdentityProfile = {
+  name: string | null;
+  email: string | null;
+  pictureUrl: string | null;
+  raw: Record<string, unknown>;
+};
+
+// The Access JWT itself only carries {email} — the IdP's own profile
+// fields (Google display name, avatar photo) come from Cloudflare's
+// separate "get identity" endpoint instead. Called on demand (see
+// /api/admin/me), never as part of the universal auth check. Returns the
+// raw payload too so a real login can be inspected once to confirm which
+// fields this Access application's Google IdP config actually populates
+// — `name`/`picture` are the commonly documented ones, but that's not
+// guaranteed for every Zero Trust Google login-method configuration.
+export async function getAccessIdentityProfile(
+  token: string,
+  teamDomain: string
+): Promise<AccessIdentityProfile | null> {
   try {
     const res = await fetch(`https://${teamDomain}/cdn-cgi/access/get-identity`, {
       headers: { Cookie: `CF_Authorization=${token}` },
     });
     if (!res.ok) return null;
-    const identity = (await res.json()) as { picture?: unknown };
-    return typeof identity.picture === "string" ? identity.picture : null;
+    const identity = (await res.json()) as Record<string, unknown>;
+    return {
+      name: typeof identity.name === "string" && identity.name ? identity.name : null,
+      email: typeof identity.email === "string" ? identity.email : null,
+      pictureUrl: typeof identity.picture === "string" ? identity.picture : null,
+      raw: identity,
+    };
   } catch {
     return null;
   }

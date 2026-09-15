@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
 import { hasRole } from "@/lib/staffAuth";
+import { sendStaffInviteEmail } from "@/lib/email";
 
 type StaffRow = {
   id: string;
@@ -49,43 +50,52 @@ export async function GET() {
   return NextResponse.json({ staff: [...byStaff.values()] });
 }
 
+// Adding a user is just a Gmail address + a set of roles — there's no
+// separate name field. The placeholder name (email's local part) shows
+// in the list until that person logs in for real; at that point
+// /api/admin/me reads their actual Google display name and photo
+// straight from Cloudflare Access, per-viewer, without needing to write
+// it back into this row at all.
 export async function POST(req: NextRequest) {
   const staff = await requirePrincipal();
   if (!staff) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
 
-  const body = (await req.json()) as { name?: string; email?: string; role?: string };
-  const name = (body.name ?? "").trim();
+  const body = (await req.json()) as { email?: string; roles?: string[] };
   const email = (body.email ?? "").trim().toLowerCase();
-  const role = body.role ?? "";
-  if (!name || !email || !role) {
-    return NextResponse.json({ error: "name, email, role required" }, { status: 400 });
+  const roles = Array.isArray(body.roles) ? body.roles.filter(Boolean) : [];
+  if (!email) {
+    return NextResponse.json({ error: "email required" }, { status: 400 });
   }
 
   const { env } = getCloudflareContext();
   const now = new Date().toISOString();
   const staffId = crypto.randomUUID();
+  const placeholderName = email.split("@")[0];
 
   await env.DB.prepare(
     `INSERT INTO staff (id, name, email, engagement_type, active, created_at)
      VALUES (?, ?, ?, 'contractor_1099', 1, ?)
      ON CONFLICT(email) DO NOTHING`
   )
-    .bind(staffId, name, email, now)
+    .bind(staffId, placeholderName, email, now)
     .run();
 
   const staffRow = await env.DB.prepare(`SELECT id FROM staff WHERE email = ?`).bind(email).first<{ id: string }>();
   if (!staffRow) return NextResponse.json({ error: "insert failed" }, { status: 500 });
 
-  const roleRow = await env.DB.prepare(`SELECT id FROM roles WHERE name = ?`).bind(role).first<{ id: string }>();
-  if (!roleRow) return NextResponse.json({ error: "unknown role" }, { status: 400 });
+  for (const role of roles) {
+    const roleRow = await env.DB.prepare(`SELECT id FROM roles WHERE name = ?`).bind(role).first<{ id: string }>();
+    if (!roleRow) continue; // unknown role name — skip rather than fail the whole request
+    await env.DB.prepare(
+      `INSERT INTO staff_roles (id, staff_id, role_id, senior_grade, granted_at)
+       VALUES (?, ?, ?, 0, ?)
+       ON CONFLICT(staff_id, role_id) DO UPDATE SET revoked_at = NULL`
+    )
+      .bind(crypto.randomUUID(), staffRow.id, roleRow.id, now)
+      .run();
+  }
 
-  await env.DB.prepare(
-    `INSERT INTO staff_roles (id, staff_id, role_id, senior_grade, granted_at)
-     VALUES (?, ?, ?, 0, ?)
-     ON CONFLICT(staff_id, role_id) DO NOTHING`
-  )
-    .bind(crypto.randomUUID(), staffRow.id, roleRow.id, now)
-    .run();
+  await sendStaffInviteEmail(env.RESEND_API_KEY, { toEmail: email, roles });
 
   return NextResponse.json({ ok: true, staffId: staffRow.id });
 }

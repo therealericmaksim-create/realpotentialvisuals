@@ -9,13 +9,11 @@ export type StaffMember = {
   name: string;
   email: string;
   roles: string[];
-  pictureUrl: string | null;
 };
 
 export async function getStaffMemberByEmail(
   db: D1Database,
-  email: string,
-  pictureUrl: string | null = null
+  email: string
 ): Promise<StaffMember | null> {
   const staff = await db
     .prepare(
@@ -40,7 +38,6 @@ export async function getStaffMemberByEmail(
     name: staff.name,
     email: staff.email,
     roles: (roleRows.results ?? []).map((r) => r.name),
-    pictureUrl,
   };
 }
 

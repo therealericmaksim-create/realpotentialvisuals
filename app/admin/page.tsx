@@ -21,7 +21,6 @@ export default async function AdminHome() {
         name: staff.name,
         roles: staff.roles,
         isPrincipal: hasRole(staff, "principal"),
-        pictureUrl: staff.pictureUrl,
       }}
     />
   );
