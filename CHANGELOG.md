@@ -3,6 +3,29 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.10.0 — 2026-09-15
+
+- Replaced the fixed $79.99 Starter Package + a la carte additional-style
+  pricing with pure per-render pricing across three tiers: Self-Directed
+  ($29.99, customer picks the style, fully automated), Curated ($44.99,
+  team picks the style once analysis is done), Premium ($59.99, free-text
+  custom request). Customers upload one photo and choose any quantity of
+  renders per tier. Night/Seasonal/Holiday add-ons are now a flat $9.99
+  per render regardless of tier; extra revisions are priced at the
+  render's own tier rate.
+- `order_items` gained `tier` and `custom_text` columns
+  (`migrations/0001_pricing_v2.sql`) to support the new model.
+- Phase 2's AI-vote and consensus steps (18, 20) now only run when an
+  order has at least one Curated-tier render — Self-Directed already has
+  its style and Premium isn't matched against the catalog, so there's
+  nothing to vote on. Saves an AI call on orders that don't need it.
+- Verified end-to-end against production: a real order mixing all three
+  tiers plus every add-on produced a real Stripe Checkout Session whose
+  line items and $204.93 total were confirmed via the Stripe API.
+- Homepage pricing section rewritten to match. The active Facebook
+  contest's prize copy was deliberately left as-is (an already-published
+  external commitment).
+
 ## v0.9.0 — 2026-09-15
 
 - Rebuilt the admin backend as a single-page interactive shell, porting
