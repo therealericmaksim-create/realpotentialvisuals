@@ -3,6 +3,28 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.8.0 — 2026-09-14
+
+- Real admin backend auth: Cloudflare Access (Google login) handles
+  authentication, the existing `staff`/`roles`/`staff_roles` tables
+  handle authorization. A principal-only `/staff` page manages who's
+  on staff and what tier they have — no more Cloudflare dashboard
+  trips to change access.
+- Automation Routing Sheet Phase 2 (Analysis & Matching, steps 9-20)
+  is fully built and wired: real AI vision for structure analysis and
+  design-element detection, a retained Street View neighborhood read,
+  a web-search-backed regulatory lookup with cited sources, the ported
+  133-style matching/feasibility/difficulty engine, and a 2-voter
+  (AI/algorithm) consensus blend. Triggered by a staff "Run Analysis"
+  button per order — nothing runs automatically on payment except the
+  free property/job linkage setup.
+- New `zip_climate_zones` table (39,474 US ZIPs) resolves a property's
+  climate zone from its address.
+- Verified end-to-end against a real order and a real photo — full
+  prompt/response/cost documentation in
+  `docs/phase2-analysis-cost-report.md`. Real cost for the entire
+  pipeline on one order: about 1.3 cents.
+
 ## v0.7.0 — 2026-09-14
 
 - Property address, HOA, and historic-district questions added to
