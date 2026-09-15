@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getStripeClient } from "@/lib/stripe";
 import { sendOrderConfirmationEmail } from "@/lib/email";
+import { ensurePropertyLinkage } from "@/lib/analysis/propertyLinkage";
 import type Stripe from "stripe";
 
 // Reliable, out-of-band payment confirmation — catches the case where a
@@ -63,17 +64,21 @@ export async function POST(req: NextRequest) {
           .bind(paymentIntentId, now, payment.id)
           .run();
 
+        const customerEmail = session.customer_details?.email ?? null;
+
         await env.DB.prepare(
-          `UPDATE orders SET status = 'placed', updated_at = ? WHERE id = ?`
+          `UPDATE orders SET status = 'placed', customer_email = ?, updated_at = ? WHERE id = ?`
         )
-          .bind(now, payment.order_id)
+          .bind(customerEmail, now, payment.order_id)
           .run();
 
         await sendOrderConfirmationEmail(env.RESEND_API_KEY, {
-          toEmail: session.customer_details?.email ?? null,
+          toEmail: customerEmail,
           orderId: payment.order_id,
           totalCents: session.amount_total ?? 0,
         });
+
+        await ensurePropertyLinkage(env.DB, payment.order_id);
       }
     }
   }

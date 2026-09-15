@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getStripeClient } from "@/lib/stripe";
 import { sendOrderConfirmationEmail } from "@/lib/email";
+import { ensurePropertyLinkage } from "@/lib/analysis/propertyLinkage";
 
 // Called from the Stripe success redirect to finalize an order the moment
 // the customer lands back on the site. The webhook (/api/stripe/webhook)
@@ -50,17 +51,24 @@ export async function GET(req: NextRequest) {
       .bind(paymentIntentId, now, payment.id)
       .run();
 
+    const customerEmail = session.customer_details?.email ?? null;
+
     await env.DB.prepare(
-      `UPDATE orders SET status = 'placed', updated_at = ? WHERE id = ?`
+      `UPDATE orders SET status = 'placed', customer_email = ?, updated_at = ? WHERE id = ?`
     )
-      .bind(now, payment.order_id)
+      .bind(customerEmail, now, payment.order_id)
       .run();
 
     await sendOrderConfirmationEmail(env.RESEND_API_KEY, {
-      toEmail: session.customer_details?.email ?? null,
+      toEmail: customerEmail,
       orderId: payment.order_id,
       totalCents: session.amount_total ?? 0,
     });
+
+    // Sets up client/property/job so the order is ready for Phase 2
+    // analysis the moment staff open the admin panel — never spends AI
+    // credits itself.
+    await ensurePropertyLinkage(env.DB, payment.order_id);
   }
 
   return NextResponse.json({
