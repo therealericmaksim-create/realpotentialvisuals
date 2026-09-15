@@ -3,6 +3,39 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.9.0 — 2026-09-15
+
+- Rebuilt the admin backend as a single-page interactive shell, porting
+  a design pass done in a separate Claude project
+  (`realpotential-admin-template.html`) into the real app: one route
+  (`/admin`) renders a client component that owns all navigation and
+  section state, fetching each section's data from a new `/api/admin/*`
+  route only when that section is opened, instead of a separate
+  server-rendered page per screen.
+- Orders (list, detail, Run Analysis) and Staff & Roles are fully wired
+  to real data on the new shell; every other nav item — Curation,
+  Production, Quality Control, Requests & Escalations, Finance,
+  Contests, Catalog, Settings, Reports & Audit — renders as an explicit
+  "not built yet" placeholder instead of a dead link, so the full
+  roadmap (`docs/admin-navigation-ia.md`) is visible in the nav today.
+- Added a staff-gated R2 media passthrough (`/api/admin/media/[...key]`)
+  so the admin can display the uploaded property photo and the retained
+  Street View image on an order's detail view — the old page never
+  surfaced either.
+- Fixed a real bug found while verifying Phase 2 against production
+  data end-to-end for the first time (including Street View, previously
+  blocked by the Google Maps key issues): a Stripe webhook racing the
+  checkout success-redirect could permanently strand a paid order with
+  no property/job linkage, invisibly, if the webhook's event snapshot
+  had `customer_details.email` still null. Both `/api/checkout/confirm`
+  and `/api/stripe/webhook` now backfill a still-missing email from
+  their own fresh data even when payment is already marked succeeded.
+- `/start` address autocomplete fixed — `loading=async` was resolving
+  before `google.maps.places` actually finished loading, so the widget
+  silently never attached; switched to the classic `callback=` param.
+- `RESEND_API_KEY` set — order-confirmation emails are live once
+  Resend finishes verifying the sending domain.
+
 ## v0.8.0 — 2026-09-14
 
 - Real admin backend auth: Cloudflare Access (Google login) handles
