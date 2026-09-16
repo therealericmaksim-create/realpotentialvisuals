@@ -22,7 +22,12 @@ export function middleware(req: NextRequest) {
     return new NextResponse(null, { status: 404 });
   }
 
-  if (isAdminHost && !req.nextUrl.pathname.startsWith("/admin")) {
+  // /api/admin/* routes are already correctly namespaced and must NOT be
+  // rewritten — this exact bug sent every fetch() the admin SPA makes
+  // (e.g. /api/admin/orders) to /admin/api/admin/orders instead, a route
+  // that doesn't exist, producing a 404 with Next's own not-found page
+  // HTML. That HTML (not JSON) response is what broke every admin fetch.
+  if (isAdminHost && !req.nextUrl.pathname.startsWith("/admin") && !req.nextUrl.pathname.startsWith("/api")) {
     const url = req.nextUrl.clone();
     url.pathname = `/admin${req.nextUrl.pathname}`;
     return NextResponse.rewrite(url);
