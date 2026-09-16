@@ -12,7 +12,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { env } = getCloudflareContext();
 
   const order = await env.DB.prepare(
-    `SELECT o.id, o.status, o.property_address, o.customer_email, o.job_id, o.curbappeal_photo_key, j.property_id
+    `SELECT o.id, o.status, o.property_address, o.customer_email, o.job_id, o.curbappeal_photo_key,
+            o.hoa_answer, o.historic_district_answer, o.logo_key, o.total_amount_cents, o.created_at,
+            j.property_id
      FROM orders o LEFT JOIN jobs j ON j.id = o.job_id WHERE o.id = ?`
   )
     .bind(id)
@@ -23,12 +25,36 @@ export async function GET(_req: NextRequest, { params }: Params) {
       customer_email: string | null;
       job_id: string | null;
       curbappeal_photo_key: string | null;
+      hoa_answer: string | null;
+      historic_district_answer: string | null;
+      logo_key: string | null;
+      total_amount_cents: number;
+      created_at: string;
       property_id: string | null;
     }>();
 
   if (!order) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+
+  const renderItems = await env.DB.prepare(
+    `SELECT tier, style_name, custom_text, night, seasonal, season_choice, holiday, holiday_choice,
+            breakdown, unit_price_cents
+     FROM order_items WHERE order_id = ?`
+  )
+    .bind(id)
+    .all<{
+      tier: string;
+      style_name: string | null;
+      custom_text: string | null;
+      night: number;
+      seasonal: number;
+      season_choice: string | null;
+      holiday: number;
+      holiday_choice: string | null;
+      breakdown: number;
+      unit_price_cents: number;
+    }>();
 
   const analysis = order.property_id
     ? await env.DB.prepare(
@@ -90,6 +116,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   return NextResponse.json({
     order,
+    renderItems: renderItems.results ?? [],
     analysis,
     consensus,
     topMatches: topMatches?.results ?? [],

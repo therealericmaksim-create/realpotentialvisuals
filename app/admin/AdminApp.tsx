@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { TIER_LABELS } from "@/lib/pricing";
 import "./admin.css";
 
 type StaffInfo = {
@@ -501,6 +502,19 @@ function OrdersListSection({
   );
 }
 
+type OrderRenderItem = {
+  tier: string;
+  style_name: string | null;
+  custom_text: string | null;
+  night: number;
+  seasonal: number;
+  season_choice: string | null;
+  holiday: number;
+  holiday_choice: string | null;
+  breakdown: number;
+  unit_price_cents: number;
+};
+
 type OrderDetail = {
   order: {
     id: string;
@@ -509,7 +523,13 @@ type OrderDetail = {
     customer_email: string | null;
     job_id: string | null;
     curbappeal_photo_key: string | null;
+    hoa_answer: string | null;
+    historic_district_answer: string | null;
+    logo_key: string | null;
+    total_amount_cents: number;
+    created_at: string;
   };
+  renderItems: OrderRenderItem[];
   analysis: { house_type: string; roof_form: string; massing_envelope: string } | null;
   consensus: {
     classification_status: string;
@@ -571,7 +591,8 @@ function OrderDetailSection({
   if (error) return <p className="error-text">{error}</p>;
   if (!data) return <p className="loading">Loading…</p>;
 
-  const { order, analysis, consensus, topMatches, regulatory, neighborhood } = data;
+  const { order, renderItems, analysis, consensus, topMatches, regulatory, neighborhood } = data;
+  const total = (order.total_amount_cents / 100).toFixed(2);
 
   return (
     <>
@@ -579,13 +600,68 @@ function OrderDetailSection({
       <div className="page-head">
         <div className="eyebrow">Order {order.id.slice(0, 8)}</div>
         <h1>{order.property_address}</h1>
-        <p>{order.customer_email ?? "no email"} — status: {order.status}</p>
+        <p>{order.customer_email ?? "no email"} — status: {order.status} — ${total} — placed {new Date(order.created_at).toLocaleString()}</p>
       </div>
 
       {order.curbappeal_photo_key && (
         // eslint-disable-next-line @next/next/no-img-element
         <img className="detail-photo" src={`/api/admin/media/${order.curbappeal_photo_key}`} alt="Uploaded property photo" />
       )}
+
+      <div className="section-block">
+        <h3>Intake</h3>
+        <p className="note">HOA: {order.hoa_answer ?? "not answered"}</p>
+        <p className="note">Historic district: {order.historic_district_answer ?? "not answered"}</p>
+        <p className="note">
+          Logo:{" "}
+          {order.logo_key ? (
+            <a href={`/api/admin/media/${order.logo_key}`} target="_blank" rel="noreferrer">
+              view uploaded logo
+            </a>
+          ) : (
+            "none uploaded"
+          )}
+        </p>
+      </div>
+
+      <div className="section-block">
+        <h3>Renders Ordered ({renderItems.length})</h3>
+        {renderItems.length === 0 && <p className="note">No render items on this order.</p>}
+        {renderItems.length > 0 && (
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Tier</th>
+                <th>Style / Request</th>
+                <th>Extras</th>
+                <th>Breakdown</th>
+                <th>Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              {renderItems.map((item, i) => {
+                const extras: string[] = [];
+                if (item.night) extras.push("Night View");
+                if (item.seasonal) extras.push(`Seasonal (${item.season_choice ?? "—"})`);
+                if (item.holiday) extras.push(`Holiday (${item.holiday_choice ?? "—"})`);
+                return (
+                  <tr key={i}>
+                    <td>{TIER_LABELS[item.tier as keyof typeof TIER_LABELS] ?? item.tier}</td>
+                    <td>
+                      {item.tier === "premium"
+                        ? item.custom_text || "—"
+                        : item.style_name || (item.tier === "curated" ? "not yet assigned" : "—")}
+                    </td>
+                    <td>{extras.length > 0 ? extras.join(", ") : "—"}</td>
+                    <td>{item.breakdown ? "yes" : "no"}</td>
+                    <td>${(item.unit_price_cents / 100).toFixed(2)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       {!order.job_id && (
         <p className="error-text">No property/job linkage yet — this order hasn&apos;t completed payment confirmation.</p>

@@ -423,12 +423,15 @@ footer .legal{ font-size: 12px; color: #6f6f6b; max-width: 600px; margin: 0 auto
 .cfg-card h2{ font-size: 17px; margin-bottom: 6px; }
 .cfg-card .cfg-sub{ font-size: 13.5px; color: var(--gray); margin-bottom: 18px; }
 
-/* Photo card: a clear vertical break between the intro text and the
-   upload/preview area below it, instead of them running together. */
-.cfg-photo-intro{
-  padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid var(--line);
+/* Photo/Logo cards: title+description on the left, upload area on the
+   right, instead of stacked. */
+.cfg-two-col{
+  display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start;
 }
-.cfg-photo-intro .cfg-sub{ margin-bottom: 0; }
+.cfg-two-col .cfg-sub{ margin-bottom: 0; }
+@media (max-width: 700px){
+  .cfg-two-col{ grid-template-columns: 1fr; }
+}
 
 /* photo dropzone */
 .cfg-drop{
@@ -472,8 +475,7 @@ footer .legal{ font-size: 12px; color: #6f6f6b; max-width: 600px; margin: 0 auto
   margin-top: 3px; width: 17px; height: 17px; accent-color: var(--gold); flex-shrink: 0;
 }
 .cfg-extra label{ flex: 1; cursor: pointer; }
-.cfg-extra .cfg-extra-name{ font-weight: 600; font-size: 14.5px; }
-.cfg-extra .cfg-extra-note{ font-size: 12.5px; color: var(--gray); margin-top: 2px; }
+.cfg-extra .cfg-extra-name{ font-weight: 600; font-size: 14.5px; display: flex; align-items: center; gap: 6px; }
 .cfg-extra .cfg-extra-price{
   font-family: var(--font-head); font-weight: 700; color: var(--gold);
   font-size: 14px; white-space: nowrap;
@@ -489,16 +491,26 @@ footer .legal{ font-size: 12px; color: #6f6f6b; max-width: 600px; margin: 0 auto
   border: 1px solid var(--line); border-radius: 6px; padding: 18px; margin-bottom: 14px;
   background: var(--bg-alt);
 }
-.cfg-style-row-head{
-  display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px;
+.cfg-row-title-bar{
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
+.cfg-row-title{
+  font-family: var(--font-head); font-weight: 700; font-size: 14.5px; color: var(--white);
+  display: flex; align-items: center; gap: 6px;
+}
+.cfg-row-toggle{
+  background: none; border: 1px solid var(--line); color: var(--gray); width: 30px; height: 30px;
+  border-radius: 5px; cursor: pointer; font-size: 11px; flex: none;
+}
+.cfg-row-toggle:hover{ border-color: var(--gold); color: var(--gold); }
 .cfg-style-row select{
-  flex: 1; background: var(--panel); color: var(--white); border: 1px solid var(--line);
+  width: 100%; margin-top: 14px; background: var(--panel); color: var(--white); border: 1px solid var(--line);
   border-radius: 5px; padding: 10px 12px; font-family: var(--font-body); font-size: 14px;
 }
 .cfg-remove{
-  background: none; border: 1px solid var(--line); color: var(--gray);
+  margin-top: 14px; background: none; border: 1px solid var(--line); color: var(--gray);
   border-radius: 5px; padding: 8px 12px; font-size: 12.5px; cursor: pointer; white-space: nowrap;
+  display: block;
 }
 .cfg-remove:hover{ border-color: var(--gold); color: var(--gold); }
 
@@ -523,17 +535,32 @@ footer .legal{ font-size: 12px; color: #6f6f6b; max-width: 600px; margin: 0 auto
   background: var(--panel);
 }
 
-@media (max-width: 480px){
-  .cfg-style-row-head{ flex-wrap: wrap; }
-  .cfg-style-row select{ flex-basis: 100%; }
-}
-
 .cfg-add-btn{
   width: 100%; background: transparent; border: 1.5px dashed var(--line); color: var(--gold);
   border-radius: 6px; padding: 14px; font-family: var(--font-head); font-weight: 700;
   font-size: 14px; cursor: pointer; transition: border-color .15s ease;
 }
 .cfg-add-btn:hover{ border-color: var(--gold); }
+.cfg-add-btn:disabled{ cursor: not-allowed; opacity: .5; border-color: var(--line); color: var(--gray); }
+.cfg-add-btn:disabled:hover{ border-color: var(--line); }
+
+/* (i) info bubbles — replace always-visible subtext under render titles
+   and extra options, shown on hover or click (so it also works on touch
+   devices with no hover at all). */
+.info-bubble{ position: relative; display: inline-flex; }
+.info-bubble-btn{
+  width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--gray);
+  background: none; color: var(--gray); font-size: 10px; font-style: italic;
+  font-family: Georgia, serif; line-height: 1; cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+.info-bubble-btn:hover{ border-color: var(--gold); color: var(--gold); }
+.info-bubble-tooltip{
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  width: 220px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: 10px 12px; font-size: 12px; font-weight: 400; line-height: 1.5; color: var(--gray);
+  z-index: 20; box-shadow: 0 6px 20px rgba(0,0,0,.4); text-transform: none;
+}
 
 /* render tiers as 3 side-by-side cards (v0.11.0) */
 .cfg-tiers-grid{

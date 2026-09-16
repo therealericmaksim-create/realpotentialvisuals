@@ -26,6 +26,7 @@ import {
 
 const EXTRA_KEYS: ExtraKey[] = ["night", "seasonal", "holiday"];
 const RENDER_TIERS: RenderTier[] = ["self_directed", "curated", "premium"];
+const MAX_RENDERS_PER_TIER = 6;
 
 type Step =
   | "form"
@@ -45,6 +46,7 @@ type RenderItem = {
   seasonChoice: string;
   holidayChoice: string;
   breakdown: boolean;
+  collapsed: boolean;
 };
 
 function emptyExtras(): Record<ExtraKey, boolean> {
@@ -101,6 +103,35 @@ function StyleDescription({ styleName }: { styleName: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+// A small "(i)" info bubble — shows its text on hover OR click (so it
+// works on touch devices with no hover at all), used both for the tier
+// description next to each render row's title and for each extra
+// option's description, replacing always-visible subtext that was
+// cluttering both.
+function InfoBubble({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span
+      className="info-bubble"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        className="info-bubble-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        aria-label="More info"
+      >
+        i
+      </button>
+      {open && <span className="info-bubble-tooltip">{text}</span>}
+    </span>
   );
 }
 
@@ -217,23 +248,33 @@ function StartPageInner() {
   }
 
   function addRenderRow(tier: RenderTier) {
-    setRenderItems((rows) => [
-      ...rows,
-      {
-        id: crypto.randomUUID(),
-        tier,
-        styleName: "",
-        customText: "",
-        extras: emptyExtras(),
-        seasonChoice: "",
-        holidayChoice: "",
-        breakdown: false,
-      },
-    ]);
+    setRenderItems((rows) => {
+      if (rows.filter((r) => r.tier === tier).length >= MAX_RENDERS_PER_TIER) return rows;
+      return [
+        ...rows,
+        {
+          id: crypto.randomUUID(),
+          tier,
+          styleName: "",
+          customText: "",
+          extras: emptyExtras(),
+          seasonChoice: "",
+          holidayChoice: "",
+          breakdown: false,
+          collapsed: false,
+        },
+      ];
+    });
   }
 
   function removeRenderRow(id: string) {
     setRenderItems((rows) => rows.filter((r) => r.id !== id));
+  }
+
+  function toggleRowCollapsed(id: string) {
+    setRenderItems((rows) =>
+      rows.map((r) => (r.id === id ? { ...r, collapsed: !r.collapsed } : r))
+    );
   }
 
   function updateRowStyleName(id: string, styleName: string) {
@@ -651,48 +692,52 @@ function StartPageInner() {
         <div>
           {/* ---------------- PHOTO UPLOAD ---------------- */}
           <div className="cfg-card">
-            <div className="cfg-photo-intro">
-              <h2>Your Home&apos;s Photo</h2>
-              <p className="cfg-sub">
-                A clear daytime photo of the front exterior — whole house,
-                straight-on, unobstructed.
-              </p>
+            <div className="cfg-two-col">
+              <div>
+                <h2>Your Home&apos;s Photo</h2>
+                <p className="cfg-sub">
+                  A clear daytime photo of the front exterior — whole house,
+                  straight-on, unobstructed.
+                </p>
+              </div>
+              <div>
+                <label className="cfg-drop">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoChange}
+                  />
+                  <div className="cfg-drop-label">
+                    {photo ? "Choose a Different Photo" : "Click to Upload a Photo"}
+                  </div>
+                  <div className="cfg-drop-hint">
+                    JPG, PNG, or WEBP, front exterior only — max {HOUSE_PHOTO_MAX_MB}MB
+                  </div>
+                </label>
+                {photoError && <div className="cfg-error">{photoError}</div>}
+                {photoPreview && (
+                  <>
+                    <div className="cfg-preview">
+                      <img src={photoPreview} alt="Uploaded home preview" />
+                    </div>
+                    <div className="cfg-filename">
+                      {photo?.name} ({photo && formatFileSize(photo.size)})
+                    </div>
+                    {photoStatus === "checking" && (
+                      <div className="cfg-photo-status cfg-photo-checking">
+                        <span className="cfg-mini-spinner" />
+                        Uploading and verifying&hellip;
+                      </div>
+                    )}
+                    {photoStatus === "valid" && (
+                      <div className="cfg-photo-status cfg-photo-valid">
+                        ✓ Photo verified
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-            <label className="cfg-drop">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoChange}
-              />
-              <div className="cfg-drop-label">
-                {photo ? "Choose a Different Photo" : "Click to Upload a Photo"}
-              </div>
-              <div className="cfg-drop-hint">
-                JPG, PNG, or WEBP, front exterior only — max {HOUSE_PHOTO_MAX_MB}MB
-              </div>
-            </label>
-            {photoError && <div className="cfg-error">{photoError}</div>}
-            {photoPreview && (
-              <>
-                <div className="cfg-preview">
-                  <img src={photoPreview} alt="Uploaded home preview" />
-                </div>
-                <div className="cfg-filename">
-                  {photo?.name} ({photo && formatFileSize(photo.size)})
-                </div>
-                {photoStatus === "checking" && (
-                  <div className="cfg-photo-status cfg-photo-checking">
-                    <span className="cfg-mini-spinner" />
-                    Uploading and verifying&hellip;
-                  </div>
-                )}
-                {photoStatus === "valid" && (
-                  <div className="cfg-photo-status cfg-photo-valid">
-                    ✓ Photo verified
-                  </div>
-                )}
-              </>
-            )}
           </div>
 
           {/* ---------------- PROPERTY DETAILS ---------------- */}
@@ -746,136 +791,145 @@ function StartPageInner() {
 
                 {rows.map((row, i) => (
                   <div className="cfg-style-row" key={row.id}>
-                    <div className="cfg-style-row-head">
-                      {tier === "self_directed" && (
-                        <select
-                          value={row.styleName}
-                          onChange={(e) => updateRowStyleName(row.id, e.target.value)}
-                        >
-                          <option value="">Select a style&hellip;</option>
-                          {STYLE_FAMILIES.map((fam) => (
-                            <optgroup key={fam.family} label={fam.family}>
-                              {fam.styles.map((s) => (
-                                <option key={s} value={s}>
-                                  {s}
-                                </option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
-                      )}
-                      {tier === "curated" && (
-                        <div className="cfg-sub" style={{ margin: 0 }}>
-                          Curated render #{i + 1} — we&apos;ll pick the style
-                          for you once your photo&apos;s been analyzed.
-                        </div>
-                      )}
-                      {tier === "premium" && (
-                        <div className="cfg-sub" style={{ margin: 0 }}>
-                          Premium render #{i + 1}
-                        </div>
-                      )}
+                    <div className="cfg-row-title-bar">
+                      <div className="cfg-row-title">
+                        {TIER_LABELS[tier]} render #{i + 1}
+                        <InfoBubble text={TIER_DESCRIPTIONS[tier]} />
+                      </div>
                       <button
                         type="button"
-                        className="cfg-remove"
-                        onClick={() => removeRenderRow(row.id)}
+                        className="cfg-row-toggle"
+                        onClick={() => toggleRowCollapsed(row.id)}
+                        aria-label={row.collapsed ? "Expand this render" : "Collapse this render"}
                       >
-                        Remove
+                        {row.collapsed ? "▼" : "▲"}
                       </button>
                     </div>
 
-                    {tier === "self_directed" && row.styleName && (
-                      <StyleDescription styleName={row.styleName} />
-                    )}
-
-                    {tier === "premium" && (
+                    {!row.collapsed && (
                       <>
-                        <textarea
-                          className="cfg-textarea"
-                          value={row.customText}
-                          onChange={(e) => updateRowCustomText(row.id, e.target.value)}
-                          placeholder="Describe the specific style, era, or details you want..."
-                        />
-                        <div
-                          className={`cfg-word-count${
-                            row.customText.length >= PREMIUM_CHAR_LIMIT ? " cfg-word-warn" : ""
-                          }`}
+                        <button
+                          type="button"
+                          className="cfg-remove"
+                          onClick={() => removeRenderRow(row.id)}
                         >
-                          {row.customText.length} / {PREMIUM_CHAR_LIMIT} characters
-                        </div>
-                        <div className="cfg-warning">
-                          Heads up: very extensive or highly detailed requests
-                          can be harder to render faithfully — the more
-                          specific and layered the description, the more
-                          likely some details drift from exactly what you
-                          pictured.
-                        </div>
-                      </>
-                    )}
+                          Remove
+                        </button>
 
-                    {EXTRA_KEYS.map((key) => (
-                      <Fragment key={key}>
+                        {tier === "self_directed" && (
+                          <select
+                            value={row.styleName}
+                            onChange={(e) => updateRowStyleName(row.id, e.target.value)}
+                          >
+                            <option value="">Select a style&hellip;</option>
+                            {STYLE_FAMILIES.map((fam) => (
+                              <optgroup key={fam.family} label={fam.family}>
+                                {fam.styles.map((s) => (
+                                  <option key={s} value={s}>
+                                    {s}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ))}
+                          </select>
+                        )}
+
+                        {tier === "self_directed" && row.styleName && (
+                          <StyleDescription styleName={row.styleName} />
+                        )}
+
+                        {tier === "premium" && (
+                          <>
+                            <textarea
+                              className="cfg-textarea"
+                              value={row.customText}
+                              onChange={(e) => updateRowCustomText(row.id, e.target.value)}
+                              placeholder="Describe the specific style, era, or details you want..."
+                            />
+                            <div
+                              className={`cfg-word-count${
+                                row.customText.length >= PREMIUM_CHAR_LIMIT ? " cfg-word-warn" : ""
+                              }`}
+                            >
+                              {row.customText.length} / {PREMIUM_CHAR_LIMIT} characters
+                            </div>
+                            <div className="cfg-warning">
+                              Heads up: very extensive or highly detailed requests
+                              can be harder to render faithfully — the more
+                              specific and layered the description, the more
+                              likely some details drift from exactly what you
+                              pictured.
+                            </div>
+                          </>
+                        )}
+
+                        {EXTRA_KEYS.map((key) => (
+                          <Fragment key={key}>
+                            <div className="cfg-extra">
+                              <input
+                                type="checkbox"
+                                id={`row-${row.id}-${key}`}
+                                checked={row.extras[key]}
+                                onChange={() => toggleRowExtra(row.id, key)}
+                              />
+                              <label htmlFor={`row-${row.id}-${key}`}>
+                                <div className="cfg-extra-name">
+                                  {EXTRA_LABELS[key]}
+                                  <InfoBubble text="Applies to this render only" />
+                                </div>
+                              </label>
+                              <div className="cfg-extra-price">{money(EXTRA_PRICE)}</div>
+                            </div>
+
+                            {key === "seasonal" && row.extras.seasonal && (
+                              <select
+                                className="cfg-sub-select"
+                                value={row.seasonChoice}
+                                onChange={(e) => updateRowSeasonChoice(row.id, e.target.value)}
+                              >
+                                <option value="">Choose a season&hellip;</option>
+                                {SEASON_OPTIONS.map((s) => (
+                                  <option key={s.value} value={s.value}>
+                                    {s.label} — {s.description}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+
+                            {key === "holiday" && row.extras.holiday && (
+                              <select
+                                className="cfg-sub-select"
+                                value={row.holidayChoice}
+                                onChange={(e) => updateRowHolidayChoice(row.id, e.target.value)}
+                              >
+                                <option value="">Choose a holiday&hellip;</option>
+                                {HOLIDAY_OPTIONS.map((h) => (
+                                  <option key={h} value={h}>
+                                    {h}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </Fragment>
+                        ))}
+
                         <div className="cfg-extra">
                           <input
                             type="checkbox"
-                            id={`row-${row.id}-${key}`}
-                            checked={row.extras[key]}
-                            onChange={() => toggleRowExtra(row.id, key)}
+                            id={`row-${row.id}-breakdown`}
+                            checked={row.breakdown}
+                            onChange={() => toggleRowBreakdown(row.id)}
                           />
-                          <label htmlFor={`row-${row.id}-${key}`}>
-                            <div className="cfg-extra-name">{EXTRA_LABELS[key]}</div>
-                            <div className="cfg-extra-note">Applies to this render only</div>
+                          <label htmlFor={`row-${row.id}-breakdown`}>
+                            <div className="cfg-extra-name">
+                              {STRUCTURAL_BREAKDOWN_LABEL}
+                              <InfoBubble text="An itemized list of what's structural vs. cosmetic for this render" />
+                            </div>
                           </label>
-                          <div className="cfg-extra-price">{money(EXTRA_PRICE)}</div>
+                          <div className="cfg-extra-price">{money(STRUCTURAL_BREAKDOWN_PRICE)}</div>
                         </div>
-
-                        {key === "seasonal" && row.extras.seasonal && (
-                          <select
-                            className="cfg-sub-select"
-                            value={row.seasonChoice}
-                            onChange={(e) => updateRowSeasonChoice(row.id, e.target.value)}
-                          >
-                            <option value="">Choose a season&hellip;</option>
-                            {SEASON_OPTIONS.map((s) => (
-                              <option key={s.value} value={s.value}>
-                                {s.label} — {s.description}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-
-                        {key === "holiday" && row.extras.holiday && (
-                          <select
-                            className="cfg-sub-select"
-                            value={row.holidayChoice}
-                            onChange={(e) => updateRowHolidayChoice(row.id, e.target.value)}
-                          >
-                            <option value="">Choose a holiday&hellip;</option>
-                            {HOLIDAY_OPTIONS.map((h) => (
-                              <option key={h} value={h}>
-                                {h}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </Fragment>
-                    ))}
-
-                    <div className="cfg-extra">
-                      <input
-                        type="checkbox"
-                        id={`row-${row.id}-breakdown`}
-                        checked={row.breakdown}
-                        onChange={() => toggleRowBreakdown(row.id)}
-                      />
-                      <label htmlFor={`row-${row.id}-breakdown`}>
-                        <div className="cfg-extra-name">{STRUCTURAL_BREAKDOWN_LABEL}</div>
-                        <div className="cfg-extra-note">
-                          An itemized list of what&apos;s structural vs. cosmetic for this render
-                        </div>
-                      </label>
-                      <div className="cfg-extra-price">{money(STRUCTURAL_BREAKDOWN_PRICE)}</div>
-                    </div>
+                      </>
+                    )}
                   </div>
                 ))}
 
@@ -883,8 +937,11 @@ function StartPageInner() {
                   type="button"
                   className="cfg-add-btn"
                   onClick={() => addRenderRow(tier)}
+                  disabled={rows.length >= MAX_RENDERS_PER_TIER}
                 >
-                  + Add a {TIER_LABELS[tier]} Render ({money(RENDER_PRICE[tier])})
+                  {rows.length >= MAX_RENDERS_PER_TIER
+                    ? `Maximum ${MAX_RENDERS_PER_TIER} reached`
+                    : `+ Add a ${TIER_LABELS[tier]} Render (${money(RENDER_PRICE[tier])})`}
                 </button>
               </div>
             );
@@ -893,27 +950,33 @@ function StartPageInner() {
 
           {/* ---------------- LOGO ---------------- */}
           <div className="cfg-card">
-            <h2>Add Your Logo</h2>
-            <p className="cfg-sub">
-              Your logo appears in the top-left of every delivered image,
-              alongside — not replacing — our own mark in the bottom-right.
-            </p>
-            <label className="cfg-drop">
-              <input type="file" accept="image/*" onChange={handleLogoChange} />
-              <div className="cfg-drop-label">
-                {logo ? "Choose a Different Logo" : "Click to Upload Your Logo"}
+            <div className="cfg-two-col">
+              <div>
+                <h2>Add Your Logo</h2>
+                <p className="cfg-sub">
+                  Your logo appears in the top-left of every delivered image,
+                  alongside — not replacing — our own mark in the bottom-right.
+                </p>
               </div>
-              <div className="cfg-drop-hint">
-                {money(LOGO_PRICE)} — PNG with transparent background
-                recommended, max {LOGO_MAX_MB}MB
+              <div>
+                <label className="cfg-drop">
+                  <input type="file" accept="image/*" onChange={handleLogoChange} />
+                  <div className="cfg-drop-label">
+                    {logo ? "Choose a Different Logo" : "Click to Upload Your Logo"}
+                  </div>
+                  <div className="cfg-drop-hint">
+                    {money(LOGO_PRICE)} — PNG with transparent background
+                    recommended, max {LOGO_MAX_MB}MB
+                  </div>
+                </label>
+                {logoError && <div className="cfg-error">{logoError}</div>}
+                {logo && (
+                  <div className="cfg-filename">
+                    {logoName} ({formatFileSize(logo.size)})
+                  </div>
+                )}
               </div>
-            </label>
-            {logoError && <div className="cfg-error">{logoError}</div>}
-            {logo && (
-              <div className="cfg-filename">
-                {logoName} ({formatFileSize(logo.size)})
-              </div>
-            )}
+            </div>
           </div>
         </div>
 
