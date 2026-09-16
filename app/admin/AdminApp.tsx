@@ -440,7 +440,7 @@ function OrdersListSection({
   }, [load]);
 
   async function deleteOrder(o: OrderListRow) {
-    const label = o.property_address || o.customer_email || o.id.slice(0, 8);
+    const label = o.property_address || o.customer_email || o.id;
     if (!window.confirm(`Permanently delete the order for "${label}"? This can't be undone.`)) return;
     setDeletingId(o.id);
     try {
@@ -508,7 +508,7 @@ function OrdersListSection({
             <tbody>
               {filtered.map((o) => (
                 <tr key={o.id} className="clickable" onClick={() => onOpenOrder(o.id)}>
-                  <td>{o.id.slice(0, 8)}</td>
+                  <td style={{ fontFamily: "monospace", fontSize: 12 }}>{o.id}</td>
                   <td><span className="pill">{o.status}</span></td>
                   <td>{o.property_address ?? "—"}</td>
                   <td>{o.customer_email ?? "—"}</td>
@@ -635,7 +635,7 @@ function OrderDetailSection({
     <>
       <button className="back-link" onClick={onBack}>← Back to Orders</button>
       <div className="page-head">
-        <div className="eyebrow">Order {order.id.slice(0, 8)}</div>
+        <div className="eyebrow" style={{ fontFamily: "monospace" }}>Order {order.id}</div>
         <h1>{order.property_address}</h1>
         <p>{order.customer_email ?? "no email"} — status: {order.status} — ${total} — placed {new Date(order.created_at).toLocaleString()}</p>
       </div>
