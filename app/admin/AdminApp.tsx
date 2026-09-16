@@ -407,9 +407,27 @@ function OrdersListSection({
 
   useEffect(() => {
     fetch("/api/admin/orders")
-      .then((r) => r.json() as Promise<{ orders: OrderListRow[] }>)
+      .then(async (r) => {
+        const text = await r.text();
+        let parsed: { orders?: OrderListRow[]; error?: string } | null = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          // Not JSON at all — almost always means something between the
+          // browser and this route returned an HTML page instead (a
+          // Cloudflare Access re-auth redirect, or an edge error page)
+          // rather than the route ever actually running. Show the raw
+          // status and a snippet instead of a generic message, since
+          // that's the only way to tell which case this is.
+          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+        }
+        if (!r.ok) {
+          throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+        }
+        return parsed as { orders: OrderListRow[] };
+      })
       .then((d) => setOrders(d.orders ?? []))
-      .catch(() => setError("Failed to load orders."));
+      .catch((e: Error) => setError(`Failed to load orders: ${e.message}`));
   }, []);
 
   // Adopt a query the header search bar just ran, then let local edits
@@ -520,9 +538,19 @@ function OrderDetailSection({
 
   const load = useCallback(() => {
     fetch(`/api/admin/orders/${orderId}`)
-      .then((r) => r.json() as Promise<OrderDetail>)
+      .then(async (r) => {
+        const text = await r.text();
+        let parsed: (OrderDetail & { error?: string }) | null = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+        return parsed as OrderDetail;
+      })
       .then((d) => setData(d))
-      .catch(() => setError("Failed to load order."));
+      .catch((e: Error) => setError(`Failed to load order: ${e.message}`));
   }, [orderId]);
 
   useEffect(() => {
@@ -725,12 +753,19 @@ function UsersSection({ isPrincipal }: { isPrincipal: boolean }) {
 
   const load = useCallback(() => {
     fetch("/api/admin/staff")
-      .then((r) => {
-        if (!r.ok) throw new Error();
-        return r.json() as Promise<{ staff: StaffMemberRow[] }>;
+      .then(async (r) => {
+        const text = await r.text();
+        let parsed: { staff?: StaffMemberRow[]; error?: string } | null = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+        return parsed as { staff: StaffMemberRow[] };
       })
       .then((d) => setList(d.staff ?? []))
-      .catch(() => setError("Failed to load users — principal access required."));
+      .catch((e: Error) => setError(`Failed to load users: ${e.message}`));
   }, []);
 
   useEffect(() => {
