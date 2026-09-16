@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
+import { hasRole } from "@/lib/staffAuth";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -123,4 +124,25 @@ export async function GET(_req: NextRequest, { params }: Params) {
     regulatory,
     neighborhood,
   });
+}
+
+// Principal-only, same bar as deleting a user. Removes the order and its
+// own order_items/payments rows (both FK-reference orders.id, so they'd
+// otherwise block the delete) — deliberately does NOT touch the linked
+// job/property/client, since those represent the real customer/property
+// and may be legitimately reused by other orders later.
+export async function DELETE(_req: NextRequest, { params }: Params) {
+  const staff = await getCurrentStaff();
+  if (!staff || !hasRole(staff, "principal")) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const { env } = getCloudflareContext();
+
+  await env.DB.prepare(`DELETE FROM order_items WHERE order_id = ?`).bind(id).run();
+  await env.DB.prepare(`DELETE FROM payments WHERE order_id = ?`).bind(id).run();
+  await env.DB.prepare(`DELETE FROM orders WHERE id = ?`).bind(id).run();
+
+  return NextResponse.json({ ok: true });
 }

@@ -279,6 +279,7 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
               onOpenOrder={openOrder}
               initialQuery={orderSearch}
               onQueryConsumed={() => setOrderSearch("")}
+              isPrincipal={staff.isPrincipal}
             />
           )}
           {section === "order-detail" && selectedOrderId && (
@@ -397,16 +398,19 @@ function OrdersListSection({
   onOpenOrder,
   initialQuery,
   onQueryConsumed,
+  isPrincipal,
 }: {
   onOpenOrder: (id: string) => void;
   initialQuery: string;
   onQueryConsumed: () => void;
+  isPrincipal: boolean;
 }) {
   const [orders, setOrders] = useState<OrderListRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState(initialQuery);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetch("/api/admin/orders")
       .then(async (r) => {
         const text = await r.text();
@@ -430,6 +434,22 @@ function OrdersListSection({
       .then((d) => setOrders(d.orders ?? []))
       .catch((e: Error) => setError(`Failed to load orders: ${e.message}`));
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function deleteOrder(o: OrderListRow) {
+    const label = o.property_address || o.customer_email || o.id.slice(0, 8);
+    if (!window.confirm(`Permanently delete the order for "${label}"? This can't be undone.`)) return;
+    setDeletingId(o.id);
+    try {
+      await fetch(`/api/admin/orders/${o.id}`, { method: "DELETE" });
+      load();
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   // Adopt a query the header search bar just ran, then let local edits
   // (typing in the box below) take over from there.
@@ -482,6 +502,7 @@ function OrdersListSection({
                 <th>Address</th>
                 <th>Customer</th>
                 <th>Ready for analysis?</th>
+                {isPrincipal && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -492,6 +513,21 @@ function OrdersListSection({
                   <td>{o.property_address ?? "—"}</td>
                   <td>{o.customer_email ?? "—"}</td>
                   <td>{o.job_id ? "yes" : "no"}</td>
+                  {isPrincipal && (
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <button
+                        className="stat-link"
+                        style={{ color: "var(--leg)" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteOrder(o);
+                        }}
+                        disabled={deletingId === o.id}
+                      >
+                        {deletingId === o.id ? "Deleting…" : "Delete"}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -555,6 +591,7 @@ function OrderDetailSection({
   const [data, setData] = useState<OrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [showFullRegulatory, setShowFullRegulatory] = useState(false);
 
   const load = useCallback(() => {
     fetch(`/api/admin/orders/${orderId}`)
@@ -720,7 +757,18 @@ function OrderDetailSection({
                 Zoning: {regulatory.zoning_district ?? "unknown"} — Historic overlay:{" "}
                 {regulatory.historic_overlay === null ? "unknown" : regulatory.historic_overlay ? "yes" : "no"} — Flood zone: {regulatory.flood_zone ?? "unknown"}
               </p>
-              <p className="note">{regulatory.summary}</p>
+              <button
+                type="button"
+                className="stat-link"
+                onClick={() => setShowFullRegulatory((v) => !v)}
+              >
+                {showFullRegulatory ? "Hide" : "Show"} full research &amp; sources
+              </button>
+              {showFullRegulatory && (
+                <p className="note" style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>
+                  {regulatory.summary}
+                </p>
+              )}
             </>
           )}
         </div>
