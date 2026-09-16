@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
+import { getDailyIntakeCap } from "@/lib/capacity";
 
 // API routes are independently reachable — they do NOT inherit
 // app/admin/layout.tsx's render-time check just because the client page
@@ -13,6 +14,8 @@ export async function GET() {
 
   const { env } = getCloudflareContext();
   const db = env.DB;
+
+  const dailyIntakeCap = await getDailyIntakeCap(db, env);
 
   const [awaitingAnalysis, awaitingCuration, awaitingQc, openRequests, openEscalations, todayIntake] =
     await Promise.all([
@@ -54,6 +57,6 @@ export async function GET() {
     openRequests: openRequests?.n ?? 0,
     openEscalations: openEscalations?.n ?? 0,
     todayIntake: todayIntake?.reserved_count ?? 0,
-    dailyIntakeCap: Number(env.DAILY_INTAKE_CAP ?? 0),
+    dailyIntakeCap,
   });
 }

@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getStripeClient } from "@/lib/stripe";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 import { ensurePropertyLinkage } from "@/lib/analysis/propertyLinkage";
+import { getConfigValue } from "@/lib/systemConfig";
 
 // Called from the Stripe success redirect to finalize an order the moment
 // the customer lands back on the site. The webhook (/api/stripe/webhook)
@@ -16,7 +17,11 @@ export async function GET(req: NextRequest) {
   }
 
   const { env } = getCloudflareContext();
-  const stripe = getStripeClient(env.STRIPE_SECRET_KEY);
+  const secretKey = await getConfigValue(env.DB, "STRIPE_SECRET_KEY", env.STRIPE_SECRET_KEY);
+  if (!secretKey) {
+    return NextResponse.json({ error: "Stripe is not configured (STRIPE_SECRET_KEY)" }, { status: 503 });
+  }
+  const stripe = getStripeClient(secretKey);
 
   const session = await stripe.checkout.sessions.retrieve(sessionId);
 
@@ -59,7 +64,8 @@ export async function GET(req: NextRequest) {
       .bind(customerEmail, now, payment.order_id)
       .run();
 
-    await sendOrderConfirmationEmail(env.RESEND_API_KEY, {
+    const resendKey = await getConfigValue(env.DB, "RESEND_API_KEY", env.RESEND_API_KEY);
+    await sendOrderConfirmationEmail(resendKey, {
       toEmail: customerEmail,
       orderId: payment.order_id,
       totalCents: session.amount_total ?? 0,

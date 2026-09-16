@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
 import { hasRole } from "@/lib/staffAuth";
 import { sendStaffInviteEmail } from "@/lib/email";
+import { getConfigValue } from "@/lib/systemConfig";
 
 type StaffRow = {
   id: string;
@@ -95,7 +96,8 @@ export async function POST(req: NextRequest) {
       .run();
   }
 
-  await sendStaffInviteEmail(env.RESEND_API_KEY, { toEmail: email, roles });
+  const resendKey = await getConfigValue(env.DB, "RESEND_API_KEY", env.RESEND_API_KEY);
+  await sendStaffInviteEmail(resendKey, { toEmail: email, roles });
 
   return NextResponse.json({ ok: true, staffId: staffRow.id });
 }

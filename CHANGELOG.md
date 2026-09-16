@@ -3,6 +3,44 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.12.0 — 2026-09-16
+
+- System Variables: every API key and operational knob (`OPENAI_API_KEY`,
+  `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`,
+  `RESEND_API_KEY`, `GOOGLE_MAPS_API_KEY`, `DAILY_INTAKE_CAP`) now resolves
+  through a new `config` D1 table first, falling back to the existing
+  Worker env var/secret (`lib/systemConfig.ts`). A principal can rotate
+  any of them from the new Settings → System Variables admin page with no
+  deploy; every call site across checkout, the Stripe webhook, photo-check,
+  the Maps key endpoint, staff invites, and the Phase 2 orchestrator was
+  audited and switched over. `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD` are
+  deliberately excluded — those gate admin login itself, so a bad DB value
+  for either could lock everyone out with no way back in except direct D1
+  access. Phase 2 analysis now throws a clear, specific error instead of
+  a vague failure if `OPENAI_API_KEY` isn't configured anywhere. Every
+  System Variables change (set or revert) is also logged to the schema's
+  pre-existing, previously-unused `events` table (`entity_type = 'config'`)
+  with the old and new value — a bad key rotation can be recovered by
+  querying `events` directly in D1, with no dependency on the admin UI
+  itself still working.
+- Removed the placeholder "Pricing & Packages" and "Daily Intake Cap"
+  Settings pages — pricing lives in code (`lib/pricing.ts`) with coupons
+  planned for future discounting instead of packages, and the intake cap
+  is now just one of the System Variables.
+- Admin: built out the Manual Order form (Orders → Manual Order),
+  replicating the public `/start` intake — customer email, address, HOA
+  and historic-district answers, photo upload, logo flag, and up to 6
+  render items per tier (self-directed style picker, curated, premium
+  free-text) with the same night/seasonal/holiday/breakdown extras and
+  live total. Deliberately skips the Gate 0/1 AI photo check (staff are
+  already looking at the photo) and skips Stripe entirely — the order
+  saves straight to `status = 'placed'` with the customer's email and
+  property linkage already in place, ready for "Run Analysis" the moment
+  it's created. New endpoints: `POST /api/admin/photo-upload` and
+  `POST /api/admin/orders/manual`. The order-creation logic itself was
+  extracted into a shared `lib/orders.ts` so the public intake and this
+  form can never drift apart on schema or pricing.
+
 ## v0.11.0 — 2026-09-15
 
 - Favicon: the RealPotential crown mark (`app/icon.png`).

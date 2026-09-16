@@ -25,6 +25,7 @@ import {
 } from "./styleMatching";
 import { computeVoterConsensus, type AlgorithmVoteRow, type AiVote as VoterAiVote } from "./voterBlend";
 import type { AiCallLog } from "./aiLog";
+import { getConfigValue } from "../systemConfig";
 
 export type Phase2RunResult = {
   orderId: string;
@@ -57,12 +58,18 @@ export async function runPhase2Analysis(
   env: {
     DB: D1Database;
     MEDIA: R2Bucket;
-    OPENAI_API_KEY: string;
+    OPENAI_API_KEY?: string;
     GOOGLE_MAPS_API_KEY?: string;
   },
   orderId: string
 ): Promise<Phase2RunResult> {
   const logs: AiCallLog[] = [];
+
+  const openaiKey = await getConfigValue(env.DB, "OPENAI_API_KEY", env.OPENAI_API_KEY);
+  if (!openaiKey) {
+    throw new Error("Phase 2 analysis requires OPENAI_API_KEY, which is not configured (System Variables or Worker secret)");
+  }
+  const mapsKey = await getConfigValue(env.DB, "GOOGLE_MAPS_API_KEY", env.GOOGLE_MAPS_API_KEY);
 
   const order = await env.DB.prepare(
     `SELECT o.id, o.curbappeal_photo_key, o.property_address, o.job_id, j.property_id
@@ -97,7 +104,7 @@ export async function runPhase2Analysis(
   const photoDataUrl = await imageUrlToDataUrl(env.MEDIA, order.curbappeal_photo_key);
 
   // --- Step 9: structure analysis ---
-  const { result: structure, log: structureLog } = await analyzeStructure(env.OPENAI_API_KEY, photoDataUrl);
+  const { result: structure, log: structureLog } = await analyzeStructure(openaiKey, photoDataUrl);
   logs.push(structureLog);
 
   const hashInput = [
@@ -186,7 +193,7 @@ export async function runPhase2Analysis(
   const elementsBySlug = new Map((allElements.results ?? []).map((e) => [e.slug, e]));
 
   const { detections, log: detectionLog } = await detectDesignElements(
-    env.OPENAI_API_KEY,
+    openaiKey,
     photoDataUrl,
     allElements.results ?? []
   );
@@ -206,11 +213,11 @@ export async function runPhase2Analysis(
   }
 
   // --- Step 11: neighborhood read ---
-  if (env.GOOGLE_MAPS_API_KEY) {
+  if (mapsKey) {
     try {
-      const streetViewBytes = await fetchStreetViewImage(env.GOOGLE_MAPS_API_KEY, order.property_address);
+      const streetViewBytes = await fetchStreetViewImage(mapsKey, order.property_address);
       const { result: neighborhood, imageKey, log: neighborhoodLog } = await readNeighborhood(
-        env.OPENAI_API_KEY,
+        openaiKey,
         env.MEDIA,
         streetViewBytes
       );
@@ -228,7 +235,7 @@ export async function runPhase2Analysis(
   }
 
   // --- Step 12: regulatory lookup ---
-  const { result: regulatory, logs: regulatoryLogs } = await lookupRegulatory(env.OPENAI_API_KEY, order.property_address);
+  const { result: regulatory, logs: regulatoryLogs } = await lookupRegulatory(openaiKey, order.property_address);
   logs.push(...regulatoryLogs);
   await env.DB.prepare(
     `INSERT INTO curbappeal_property_regulatory_lookups (id, property_id, zoning_district, historic_overlay, flood_zone, summary, citations_json, looked_up_at)
@@ -392,7 +399,7 @@ export async function runPhase2Analysis(
     // --- Step 18: AI vote ---
     const styleIdByName = new Map((styleRows.results ?? []).map((s) => [s.name, s.id]));
     const { result: vote, log: voteLog } = await castAiVote(
-      env.OPENAI_API_KEY,
+      openaiKey,
       photoDataUrl,
       [...styleNameById.values()]
     );

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getStripeClient } from "@/lib/stripe";
+import { getConfigValue } from "@/lib/systemConfig";
 import {
   computeOrderLineItems,
   type OrderItemPricingRow,
@@ -42,7 +43,11 @@ export async function POST(req: NextRequest) {
   const totalCents = lineItems.reduce((sum, l) => sum + l.amountCents, 0);
 
   const origin = req.headers.get("origin") ?? new URL(req.url).origin;
-  const stripe = getStripeClient(env.STRIPE_SECRET_KEY);
+  const secretKey = await getConfigValue(env.DB, "STRIPE_SECRET_KEY", env.STRIPE_SECRET_KEY);
+  if (!secretKey) {
+    return NextResponse.json({ error: "Stripe is not configured (STRIPE_SECRET_KEY)" }, { status: 503 });
+  }
+  const stripe = getStripeClient(secretKey);
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",

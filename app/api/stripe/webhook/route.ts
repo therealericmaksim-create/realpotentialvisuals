@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getStripeClient } from "@/lib/stripe";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 import { ensurePropertyLinkage } from "@/lib/analysis/propertyLinkage";
+import { getConfigValue } from "@/lib/systemConfig";
 import type Stripe from "stripe";
 
 // Reliable, out-of-band payment confirmation — catches the case where a
@@ -14,7 +15,7 @@ import type Stripe from "stripe";
 
 export async function POST(req: NextRequest) {
   const { env } = getCloudflareContext();
-  const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
+  const webhookSecret = await getConfigValue(env.DB, "STRIPE_WEBHOOK_SECRET", env.STRIPE_WEBHOOK_SECRET);
   if (!webhookSecret) {
     return NextResponse.json(
       { error: "STRIPE_WEBHOOK_SECRET not configured" },
@@ -22,9 +23,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const secretKey = await getConfigValue(env.DB, "STRIPE_SECRET_KEY", env.STRIPE_SECRET_KEY);
+  if (!secretKey) {
+    return NextResponse.json({ error: "Stripe is not configured (STRIPE_SECRET_KEY)" }, { status: 503 });
+  }
+
   const signature = req.headers.get("stripe-signature");
   const payload = await req.text();
-  const stripe = getStripeClient(env.STRIPE_SECRET_KEY);
+  const stripe = getStripeClient(secretKey);
 
   let event: Stripe.Event;
   try {
@@ -73,7 +79,8 @@ export async function POST(req: NextRequest) {
             .bind(customerEmail, now, payment.order_id)
             .run();
 
-          await sendOrderConfirmationEmail(env.RESEND_API_KEY, {
+          const resendKey = await getConfigValue(env.DB, "RESEND_API_KEY", env.RESEND_API_KEY);
+          await sendOrderConfirmationEmail(resendKey, {
             toEmail: customerEmail,
             orderId: payment.order_id,
             totalCents: session.amount_total ?? 0,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getConfigValue } from "@/lib/systemConfig";
 
 // Google Maps JS API keys are meant to be public — restricted by HTTP
 // referrer allowlist in Google Cloud Console, not by secrecy — so this is
@@ -11,5 +12,6 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export async function GET() {
   const { env } = getCloudflareContext();
-  return NextResponse.json({ apiKey: env.GOOGLE_MAPS_API_KEY || null });
+  const apiKey = await getConfigValue(env.DB, "GOOGLE_MAPS_API_KEY", env.GOOGLE_MAPS_API_KEY);
+  return NextResponse.json({ apiKey: apiKey || null });
 }

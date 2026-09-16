@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { TIER_LABELS } from "@/lib/pricing";
+import {
+  RENDER_PRICE,
+  TIER_LABELS,
+  TIER_DESCRIPTIONS,
+  EXTRA_LABELS,
+  SEASON_OPTIONS,
+  HOLIDAY_OPTIONS,
+  STRUCTURAL_BREAKDOWN_LABEL,
+  type RenderTier,
+} from "@/lib/pricing";
+import { STYLE_FAMILIES } from "@/lib/styles";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import "./admin.css";
 
 type StaffInfo = {
@@ -40,7 +51,7 @@ type NavGroup = {
 const NAV: NavGroup[] = [
   { key: "orders", label: "Orders", color: "var(--ops)", badge: "awaitingAnalysis", children: [
     { key: "orders-list", label: "All Orders", status: "built" },
-    { key: "orders-manual", label: "Manual Order", status: "planned" },
+    { key: "orders-manual", label: "Manual Order", status: "built" },
   ]},
   { key: "curation", label: "Curation", color: "var(--ops)", priority: 1, badge: "awaitingCuration", children: [
     { key: "curation-queue", label: "Curation Queue", status: "planned" },
@@ -71,10 +82,8 @@ const NAV: NavGroup[] = [
     { key: "users-all", label: "All Users", status: "built" },
   ]},
   { key: "settings", label: "Settings", color: "var(--exec)", priority: 6, children: [
-    { key: "settings-pricing", label: "Pricing & Packages", status: "planned" },
     { key: "settings-disclosure", label: "Disclosure Copy Version", status: "planned" },
-    { key: "settings-intake-cap", label: "Daily Intake Cap", status: "planned" },
-    { key: "settings-config", label: "General Config", status: "planned" },
+    { key: "settings-variables", label: "System Variables", status: "built" },
   ]},
   { key: "contests", label: "Contests", color: "var(--mkt)", v2: true, children: [
     { key: "contests-mgmt", label: "Contest Management", status: "planned" },
@@ -286,9 +295,23 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
             <OrderDetailSection orderId={selectedOrderId} onBack={() => goTo("orders-list")} onRan={loadDashboard} />
           )}
           {section === "users-all" && <UsersSection isPrincipal={staff.isPrincipal} />}
-          {!["dashboard", "orders-list", "order-detail", "users-all"].includes(section) && (
-            <PlaceholderSection sectionKey={section} />
+          {section === "settings-variables" && <SystemVariablesSection isPrincipal={staff.isPrincipal} />}
+          {section === "orders-manual" && (
+            <ManualOrderSection
+              onCreated={(orderId) => {
+                openOrder(orderId);
+                loadDashboard();
+              }}
+            />
           )}
+          {![
+            "dashboard",
+            "orders-list",
+            "order-detail",
+            "users-all",
+            "settings-variables",
+            "orders-manual",
+          ].includes(section) && <PlaceholderSection sectionKey={section} />}
         </main>
       </div>
     </div>
@@ -341,9 +364,9 @@ function DashboardSection({
     {
       label: "Today's Intake",
       value: dashboard ? `${dashboard.todayIntake}/${dashboard.dailyIntakeCap}` : "—",
-      sub: "Cap set in Settings · Daily Intake Cap",
+      sub: "Cap set in Settings · System Variables",
       tone: "",
-      go: "settings-intake-cap",
+      go: "settings-variables",
     },
   ];
 
@@ -1027,6 +1050,484 @@ function UsersSection({ isPrincipal }: { isPrincipal: boolean }) {
       {editingUser && (
         <EditRolesModal user={editingUser} onClose={() => setEditingUser(null)} onSaved={load} />
       )}
+    </>
+  );
+}
+
+type ConfigVarRow = {
+  key: string;
+  label: string;
+  secret: boolean;
+  value: string;
+  source: "db" | "env" | "unset";
+  updatedAt: string | null;
+};
+
+function SystemVariablesSection({ isPrincipal }: { isPrincipal: boolean }) {
+  const [rows, setRows] = useState<ConfigVarRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [edited, setEdited] = useState<Record<string, string>>({});
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  const load = useCallback(() => {
+    fetch("/api/admin/config")
+      .then(async (r) => {
+        const text = await r.text();
+        let parsed: { variables?: ConfigVarRow[]; error?: string } | null = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+        return parsed as { variables: ConfigVarRow[] };
+      })
+      .then((d) => {
+        setRows(d.variables ?? []);
+        setEdited(Object.fromEntries((d.variables ?? []).map((v) => [v.key, v.value])));
+      })
+      .catch((e: Error) => setError(`Failed to load system variables: ${e.message}`));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (!isPrincipal) {
+    return (
+      <div className="section-block">
+        <h3>Not Authorized</h3>
+        <p className="note">Only the Principal can view or change system variables.</p>
+      </div>
+    );
+  }
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/admin/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates: edited }),
+      });
+      const text = await r.text();
+      let parsed: { error?: string } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+      setSavedAt(Date.now());
+      load();
+    } catch (e) {
+      setError(`Failed to save system variables: ${(e as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="page-head">
+        <div className="eyebrow">Settings</div>
+        <h1>System Variables</h1>
+        <p>
+          Principal-only. Every field here already works from a Worker-level default — saving a value here overrides
+          that default immediately, with no deploy. Clear a field and save to revert to the default.
+        </p>
+      </div>
+
+      {error && <p className="error-text">{error}</p>}
+
+      <div className="section-block">
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Variable</th>
+              <th>Value</th>
+              <th>Source</th>
+              <th>Last Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(rows ?? []).map((row) => (
+              <tr key={row.key}>
+                <td>{row.label}</td>
+                <td style={{ minWidth: 320 }}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input
+                      type={row.secret && !revealed[row.key] ? "password" : "text"}
+                      value={edited[row.key] ?? ""}
+                      placeholder="(unset)"
+                      onChange={(e) =>
+                        setEdited((cur) => ({ ...cur, [row.key]: e.target.value }))
+                      }
+                      style={{ flex: 1 }}
+                    />
+                    {row.secret && (
+                      <button
+                        type="button"
+                        className="cfg-remove"
+                        onClick={() =>
+                          setRevealed((cur) => ({ ...cur, [row.key]: !cur[row.key] }))
+                        }
+                      >
+                        {revealed[row.key] ? "Hide" : "Show"}
+                      </button>
+                    )}
+                  </div>
+                </td>
+                <td>
+                  <span className="role-chip" style={{ cursor: "default" }}>
+                    {row.source === "db" ? "override" : row.source === "env" ? "default" : "unset"}
+                  </span>
+                </td>
+                <td className="note">
+                  {row.updatedAt ? new Date(row.updatedAt).toLocaleString() : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12 }}>
+          <button className="btn-primary" type="button" onClick={save} disabled={saving || !rows}>
+            {saving ? "Saving…" : "Save Changes"}
+          </button>
+          {savedAt && !saving && <span className="note">Saved.</span>}
+        </div>
+      </div>
+    </>
+  );
+}
+
+type ExtraKey = "night" | "seasonal" | "holiday";
+const EXTRA_KEYS: ExtraKey[] = ["night", "seasonal", "holiday"];
+const RENDER_TIERS: RenderTier[] = ["self_directed", "curated", "premium"];
+const MAX_RENDERS_PER_TIER = 6;
+
+type ManualRenderItem = {
+  id: string;
+  tier: RenderTier;
+  styleName: string;
+  customText: string;
+  extras: Record<ExtraKey, boolean>;
+  seasonChoice: string;
+  holidayChoice: string;
+  breakdown: boolean;
+};
+
+function emptyExtras(): Record<ExtraKey, boolean> {
+  return { night: false, seasonal: false, holiday: false };
+}
+
+function money(n: number) {
+  return `$${n.toFixed(2)}`;
+}
+
+// Staff-facing replica of the public /start intake form, styled with
+// admin.css instead of the public site's cfg-* classes. Skips the Gate
+// 0/1 AI photo check (staff already look at the photo while entering the
+// order — see /api/admin/photo-upload) and skips Stripe entirely: this
+// saves straight to a 'placed' order, ready for "Run Analysis".
+function ManualOrderSection({ onCreated }: { onCreated: (orderId: string) => void }) {
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [propertyAddress, setPropertyAddress] = useState("");
+  const [hoaAnswer, setHoaAnswer] = useState("");
+  const [historicDistrictAnswer, setHistoricDistrictAnswer] = useState("");
+  const [logoSelected, setLogoSelected] = useState(false);
+  const [photoKey, setPhotoKey] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [renderItems, setRenderItems] = useState<ManualRenderItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  function addRenderRow(tier: RenderTier) {
+    const countForTier = renderItems.filter((r) => r.tier === tier).length;
+    if (countForTier >= MAX_RENDERS_PER_TIER) return;
+    setRenderItems((cur) => [
+      ...cur,
+      {
+        id: crypto.randomUUID(),
+        tier,
+        styleName: "",
+        customText: "",
+        extras: emptyExtras(),
+        seasonChoice: "",
+        holidayChoice: "",
+        breakdown: false,
+      },
+    ]);
+  }
+
+  function removeRenderRow(id: string) {
+    setRenderItems((cur) => cur.filter((r) => r.id !== id));
+  }
+
+  function updateRow(id: string, patch: Partial<ManualRenderItem>) {
+    setRenderItems((cur) => cur.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
+  async function uploadPhoto(file: File) {
+    setPhotoUploading(true);
+    setPhotoError(null);
+    try {
+      const form = new FormData();
+      form.append("photo", file);
+      const r = await fetch("/api/admin/photo-upload", { method: "POST", body: form });
+      const text = await r.text();
+      let parsed: { valid?: boolean; key?: string; reason?: string; error?: string } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+      if (!parsed?.valid) throw new Error(parsed?.reason ?? "Photo rejected");
+      setPhotoKey(parsed.key ?? null);
+    } catch (e) {
+      setPhotoKey(null);
+      setPhotoError(`Failed to upload photo: ${(e as Error).message}`);
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
+
+  const total = renderItems.reduce((sum, item) => {
+    let itemTotal = RENDER_PRICE[item.tier];
+    if (item.extras.night || item.extras.seasonal || item.extras.holiday) {
+      itemTotal += (item.extras.night ? 9.99 : 0) + (item.extras.seasonal ? 9.99 : 0) + (item.extras.holiday ? 9.99 : 0);
+    }
+    if (item.breakdown) itemTotal += 19.99;
+    return sum + itemTotal;
+  }, 0) + (logoSelected ? 29.99 : 0);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (!customerEmail.trim() || !propertyAddress.trim() || renderItems.length === 0) {
+      setError("Customer email, property address, and at least one render are required.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const r = await fetch("/api/admin/orders/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerEmail,
+          curbappealPhotoKey: photoKey,
+          propertyAddress,
+          hoaAnswer,
+          historicDistrictAnswer,
+          logoSelected,
+          renderItems: renderItems.map((item) => ({
+            tier: item.tier,
+            styleName: item.styleName,
+            customText: item.customText,
+            night: item.extras.night,
+            seasonal: item.extras.seasonal,
+            seasonChoice: item.seasonChoice,
+            holiday: item.extras.holiday,
+            holidayChoice: item.holidayChoice,
+            breakdown: item.breakdown,
+          })),
+        }),
+      });
+      const text = await r.text();
+      let parsed: { orderId?: string; error?: string } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+      if (!parsed?.orderId) throw new Error("No orderId returned");
+      onCreated(parsed.orderId);
+    } catch (e) {
+      setError(`Failed to create order: ${(e as Error).message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="page-head">
+        <div className="eyebrow">Orders</div>
+        <h1>Manual Order</h1>
+        <p>
+          Enter an order on a customer&apos;s behalf — phone or email intake. Skips the AI photo gate and Stripe
+          entirely; the order is saved as placed and ready for &quot;Run Analysis&quot; immediately.
+        </p>
+      </div>
+
+      {error && <p className="error-text">{error}</p>}
+
+      <form onSubmit={submit}>
+        <div className="section-block">
+          <h3>Customer & Property</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 480 }}>
+            <input
+              type="email"
+              placeholder="Customer email"
+              value={customerEmail}
+              onChange={(e) => setCustomerEmail(e.target.value)}
+              required
+            />
+            <AddressAutocomplete value={propertyAddress} onChange={setPropertyAddress} />
+            <select value={hoaAnswer} onChange={(e) => setHoaAnswer(e.target.value)}>
+              <option value="">Is this property in an HOA?…</option>
+              <option value="yes">Yes, it&apos;s in an HOA</option>
+              <option value="no">No HOA</option>
+              <option value="not_sure">Not sure</option>
+            </select>
+            <select value={historicDistrictAnswer} onChange={(e) => setHistoricDistrictAnswer(e.target.value)}>
+              <option value="">Is this in a historic district?…</option>
+              <option value="yes">Yes, it&apos;s in a historic district</option>
+              <option value="no">Not in a historic district</option>
+              <option value="not_sure">Not sure</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="section-block">
+          <h3>Home Photo & Logo</h3>
+          <p className="note">Format/size validated the same as the public form — the AI structure check is skipped here.</p>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) uploadPhoto(file);
+            }}
+          />
+          {photoUploading && <p className="note">Uploading…</p>}
+          {photoError && <p className="error-text">{photoError}</p>}
+          {photoKey && <p className="note">Uploaded: {photoKey}</p>}
+          <label className="role-checkbox" style={{ marginTop: 12 }}>
+            <input
+              type="checkbox"
+              checked={logoSelected}
+              onChange={(e) => setLogoSelected(e.target.checked)}
+            />
+            Customer provided a logo to add ({money(29.99)})
+          </label>
+        </div>
+
+        {RENDER_TIERS.map((tier) => {
+          const rows = renderItems.filter((r) => r.tier === tier);
+          return (
+            <div className="section-block" key={tier}>
+              <h3>
+                {TIER_LABELS[tier]} — {money(RENDER_PRICE[tier])} / render
+              </h3>
+              <p className="note">{TIER_DESCRIPTIONS[tier]}</p>
+
+              {rows.map((row, i) => (
+                <div key={row.id} className="empty-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <strong>{TIER_LABELS[tier]} render #{i + 1}</strong>
+                    <button type="button" className="cfg-remove" onClick={() => removeRenderRow(row.id)}>
+                      Remove
+                    </button>
+                  </div>
+
+                  {tier === "self_directed" && (
+                    <select value={row.styleName} onChange={(e) => updateRow(row.id, { styleName: e.target.value })}>
+                      <option value="">Select a style…</option>
+                      {STYLE_FAMILIES.map((fam) => (
+                        <optgroup key={fam.family} label={fam.family}>
+                          {fam.styles.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  )}
+
+                  {tier === "premium" && (
+                    <textarea
+                      placeholder="Describe exactly what the customer wants…"
+                      value={row.customText}
+                      onChange={(e) => updateRow(row.id, { customText: e.target.value })}
+                      rows={3}
+                      style={{ width: "100%", background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", padding: "7px 10px", fontFamily: "inherit", fontSize: 13 }}
+                    />
+                  )}
+
+                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                    {EXTRA_KEYS.map((key) => (
+                      <label key={key} className="role-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={row.extras[key]}
+                          onChange={(e) =>
+                            updateRow(row.id, { extras: { ...row.extras, [key]: e.target.checked } })
+                          }
+                        />
+                        {EXTRA_LABELS[key]} ({money(9.99)})
+                      </label>
+                    ))}
+                    <label className="role-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={row.breakdown}
+                        onChange={(e) => updateRow(row.id, { breakdown: e.target.checked })}
+                      />
+                      {STRUCTURAL_BREAKDOWN_LABEL} ({money(19.99)})
+                    </label>
+                  </div>
+
+                  {row.extras.seasonal && (
+                    <select value={row.seasonChoice} onChange={(e) => updateRow(row.id, { seasonChoice: e.target.value })}>
+                      <option value="">Which season?…</option>
+                      {SEASON_OPTIONS.map((s) => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                      ))}
+                    </select>
+                  )}
+                  {row.extras.holiday && (
+                    <select value={row.holidayChoice} onChange={(e) => updateRow(row.id, { holidayChoice: e.target.value })}>
+                      <option value="">Which holiday?…</option>
+                      {HOLIDAY_OPTIONS.map((h) => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              ))}
+
+              <button
+                type="button"
+                className="cfg-remove"
+                style={{ marginTop: 10 }}
+                onClick={() => addRenderRow(tier)}
+                disabled={rows.length >= MAX_RENDERS_PER_TIER}
+              >
+                + Add {TIER_LABELS[tier]} render {rows.length >= MAX_RENDERS_PER_TIER ? "(max 6)" : ""}
+              </button>
+            </div>
+          );
+        })}
+
+        <div className="section-block" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <strong>Total: {money(total)}</strong>
+            <p className="note" style={{ margin: "4px 0 0" }}>No payment is collected here — this records what was agreed with the customer.</p>
+          </div>
+          <button className="btn-primary" type="submit" disabled={submitting}>
+            {submitting ? "Creating…" : "Create Order"}
+          </button>
+        </div>
+      </form>
     </>
   );
 }
