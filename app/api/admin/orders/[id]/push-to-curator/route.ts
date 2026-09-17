@@ -24,20 +24,21 @@ export async function POST(_req: Request, { params }: Params) {
     return NextResponse.json({ error: `Cannot push an order with status '${order.status}' to curation` }, { status: 400 });
   }
 
-  // Pushing an order with nothing to curate (no unassigned curated-tier
-  // render) would silently flip its status with zero visible effect —
-  // it would never show up in the Curation Queue, which only surfaces
-  // exactly this condition. Reject it up front instead, with a message
-  // that says why, rather than letting staff wonder why the queue still
-  // says "nothing waiting."
+  // Pushing an order with nothing to curate (no unassigned curated- or
+  // premium-tier render) would silently flip its status with zero visible
+  // effect — it would never show up in the Curation Queue, which only
+  // surfaces exactly this condition. Reject it up front instead, with a
+  // message that says why, rather than letting staff wonder why the queue
+  // still says "nothing waiting."
   const unassigned = await env.DB.prepare(
-    `SELECT COUNT(*) as n FROM order_items WHERE order_id = ? AND tier = 'curated' AND style_id IS NULL`
+    `SELECT COUNT(*) as n FROM order_items
+     WHERE order_id = ? AND tier IN ('curated','premium') AND style_id IS NULL`
   )
     .bind(id)
     .first<{ n: number }>();
   if (!unassigned || unassigned.n === 0) {
     return NextResponse.json(
-      { error: "This order has no curated-tier renders needing a style — there's nothing to push to curation." },
+      { error: "This order has no curated or premium renders needing a style — there's nothing to push to curation." },
       { status: 400 }
     );
   }

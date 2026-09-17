@@ -101,14 +101,28 @@ Role: **designer**.
 
 ---
 
-## 5. Quality Control — *(Planned — needs to be its own pass, not folded into Production)*
+## 5. Quality Control — *(QC Queue built; history/delivered still planned)*
 
-- **QC Queue** — renders with `qc_status = 'pending'`, shown against the
-  original photo (door count, windows, roofline correctness)
-- **Approved / Rejected History** — `qc_reviewer_id`, `qc_reason`
-- **Delivered** — renders with a `delivered_key` set
+- **QC Queue** *(built)* — orders at `status = 'in_qc'`, i.e. curation has
+  assigned a style to every curated/premium render and the job now needs
+  checking. Keyed off order status, NOT `renders.qc_status`: no `renders`
+  row exists until an operator has generated images by hand, so a
+  qc_status-based queue would read empty forever while real work waited.
+  - **QC Workspace** — reached only by "Check Now" on a queue row, no nav
+    entry of its own (same pattern as the Job Curation Workspace). Shows
+    the same evidence panel the curator saw (structure, regulatory,
+    neighborhood read, ranked shortlist) so the reviewer can second-guess
+    the style choice against identical information, then the assembled
+    render instruction per ordered render. Prompts are rebuilt from the
+    catalog on every load; the reviewer can edit them, and approving
+    records the final text in `prompt_generations` and moves the order to
+    `in_progress`.
+- **Approved / Rejected History** *(planned)* — `qc_reviewer_id`, `qc_reason`
+- **Delivered** *(planned)* — renders with a `delivered_key` set
 
-Backing table: `renders`.
+Backing tables: `orders` (queue + status transitions), `order_items`,
+`prompt_generations` (approved instruction text), `renders` (the
+still-planned history/delivered screens).
 Role: **quality_controller** (deliberately separate from **designer**, even
 when the same person does both today — the review has to be a distinct
 pass).

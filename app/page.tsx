@@ -326,7 +326,7 @@ export default async function Home() {
                 <ol className="how-steps">
                   <li>Describe exactly what you want, in your own words.</li>
                   <li>Our team scopes what&apos;s feasible for your home before rendering.</li>
-                  <li>Delivered with the same full quality review as every tier.</li>
+                  <li>Delivered with the same full quality review as our Curated tier.</li>
                 </ol>
               </div>
             </div>
@@ -431,7 +431,8 @@ export default async function Home() {
                 and selects up to 6 styles that genuinely fit, per order.
                 Premium is a free-text custom request &mdash; describe
                 exactly what you want, and we scope and render it for you.
-                All three get the same quality review before delivery.
+                Curated and Premium both get a human quality review before
+                delivery; Self-Directed is fully automated end to end.
               </p>
             </div>
             <div className="faq-item">

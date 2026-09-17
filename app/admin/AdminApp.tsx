@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   RENDER_PRICE,
   TIER_LABELS,
@@ -69,7 +69,9 @@ const NAV: NavGroup[] = [
     { key: "production-renders", label: "Render Iterations", status: "planned" },
   ]},
   { key: "qc", label: "Quality Control", color: "var(--exec)", priority: 3, badge: "awaitingQc", children: [
-    { key: "qc-queue", label: "QC Queue", status: "planned" },
+    // Like the Curation Queue, the QC workspace has no nav entry of its
+    // own — it's reached by "Check Now" on a queue row, never directly.
+    { key: "qc-queue", label: "QC Queue", status: "built" },
     { key: "qc-history", label: "Approved / Rejected", status: "planned" },
     { key: "qc-delivered", label: "Delivered", status: "planned" },
   ]},
@@ -118,6 +120,8 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [identity, setIdentity] = useState<IdentityProfile["identity"]>(null);
+  const [staffMenuOpen, setStaffMenuOpen] = useState(false);
+  const staffBadgeRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [orderSearch, setOrderSearch] = useState("");
   // Bumped on every nav action (goTo/openOrder/openJob) and used as a React
@@ -154,6 +158,19 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
       .catch(() => {});
   }, []);
 
+  // Closes the staff dropdown on any click outside it — the menu itself
+  // stops propagation so clicking "Log out" doesn't immediately re-close it.
+  useEffect(() => {
+    if (!staffMenuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (staffBadgeRef.current && !staffBadgeRef.current.contains(e.target as Node)) {
+        setStaffMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [staffMenuOpen]);
+
   function toggleGroup(key: string) {
     setOpenGroup((cur) => (cur === key ? null : key));
   }
@@ -174,6 +191,12 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
   function openJob(id: string) {
     setSelectedJobId(id);
     setSection("curation-workspace");
+    setNavToken((t) => t + 1);
+  }
+
+  function openQcJob(id: string) {
+    setSelectedJobId(id);
+    setSection("qc-detail");
     setNavToken((t) => t + 1);
   }
 
@@ -243,7 +266,13 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
                 <path d="M6.5 13a1.5 1.5 0 0 0 3 0" />
               </svg>
             </div>
-            <div className="staff-badge">
+            <div
+              className="staff-badge"
+              ref={staffBadgeRef}
+              onClick={() => setStaffMenuOpen((o) => !o)}
+              role="button"
+              tabIndex={0}
+            >
               {pictureUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img className="avatar" src={pictureUrl} alt={displayName} />
@@ -254,6 +283,13 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
                 <div className="name">{displayName}</div>
                 <div className="role">{(staff.roles.join(", ") || "no role").toUpperCase()}</div>
               </div>
+              {staffMenuOpen && (
+                <div className="staff-menu" onClick={(e) => e.stopPropagation()}>
+                  <a className="staff-menu-item" href="/cdn-cgi/access/logout">
+                    Log out
+                  </a>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -341,6 +377,15 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
               onSaved={loadDashboard}
             />
           )}
+          {section === "qc-queue" && <QcQueueSection key={navToken} onOpenJob={openQcJob} />}
+          {section === "qc-detail" && selectedJobId && (
+            <QcWorkspaceSection
+              key={navToken}
+              jobId={selectedJobId}
+              onBack={() => goTo("qc-queue")}
+              onApproved={loadDashboard}
+            />
+          )}
           {![
             "dashboard",
             "orders-list",
@@ -350,6 +395,8 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
             "orders-manual",
             "curation-queue",
             "curation-workspace",
+            "qc-queue",
+            "qc-detail",
           ].includes(section) && <PlaceholderSection sectionKey={section} />}
         </main>
       </div>
@@ -752,7 +799,11 @@ function OrderDetailSection({
 
   const { order, renderItems, analysis, consensus, topMatches, curationRanks, regulatory, neighborhood } = data;
   const total = (order.total_amount_cents / 100).toFixed(2);
-  const hasUnassignedCurated = renderItems.some((item) => item.tier === "curated" && !item.style_name);
+  // Curated and premium both need a curator to assign a style; only
+  // self_directed arrives with one already picked by the customer.
+  const hasUnassignedCuration = renderItems.some(
+    (item) => (item.tier === "curated" || item.tier === "premium") && !item.style_name
+  );
 
   return (
     <>
@@ -808,9 +859,14 @@ function OrderDetailSection({
                   <tr key={i}>
                     <td>{TIER_LABELS[item.tier as keyof typeof TIER_LABELS] ?? item.tier}</td>
                     <td>
-                      {item.tier === "premium"
-                        ? item.custom_text || "—"
-                        : item.style_name || (item.tier === "curated" ? "not yet assigned" : "—")}
+                      {item.tier === "premium" ? (
+                        <>
+                          {item.custom_text || "—"}
+                          <span className="note"> — {item.style_name || "style not yet assigned"}</span>
+                        </>
+                      ) : (
+                        item.style_name || (item.tier === "curated" ? "not yet assigned" : "—")
+                      )}
                     </td>
                     <td>{extras.length > 0 ? extras.join(", ") : "—"}</td>
                     <td>{item.breakdown ? "yes" : "no"}</td>
@@ -832,13 +888,13 @@ function OrderDetailSection({
           <button className="btn-primary" onClick={runAnalysis} disabled={running}>
             {running ? "Running…" : analysis ? "Re-run Analysis" : "Run Analysis"}
           </button>
-          {(order.status === "placed" || order.status === "analyzing") && hasUnassignedCurated && (
+          {(order.status === "placed" || order.status === "analyzing") && hasUnassignedCuration && (
             <button className="cfg-remove" onClick={pushToCurator} disabled={pushing}>
               {pushing ? "Pushing…" : "Push to Curator"}
             </button>
           )}
-          {(order.status === "placed" || order.status === "analyzing") && !hasUnassignedCurated && (
-            <span className="note">No curated-tier renders on this order — nothing to push to curation.</span>
+          {(order.status === "placed" || order.status === "analyzing") && !hasUnassignedCuration && (
+            <span className="note">No curated or premium renders on this order — nothing to push to curation.</span>
           )}
           {order.status === "in_curation" && <span className="pill">pushed to curator</span>}
         </div>
@@ -1735,7 +1791,7 @@ function CurationQueueSection({ onOpenJob }: { onOpenJob: (jobId: string) => voi
       <div className="page-head">
         <div className="eyebrow">Curation</div>
         <h1>Curation Queue</h1>
-        <p>Jobs with at least one curated-tier render still waiting on a style. Oldest first.</p>
+        <p>Jobs with at least one curated or premium render still waiting on a style. Oldest first.</p>
       </div>
 
       {error && <p className="error-text">{error}</p>}
@@ -1792,8 +1848,10 @@ function CurationQueueSection({ onOpenJob }: { onOpenJob: (jobId: string) => voi
 type CurationSlot = {
   id: string;
   order_id: string;
+  tier: string;
   style_id: string | null;
   style_name: string;
+  custom_text: string | null;
   night: number;
   seasonal: number;
   season_choice: string | null;
@@ -1805,12 +1863,102 @@ type CurationSlot = {
 type CurationWorkspaceData = {
   job: { id: string; propertyAddress: string; curbappealPhotoKey: string | null };
   slots: CurationSlot[];
-  analysis: { house_type: string; roof_form: string; massing_envelope: string } | null;
-  topMatches: { name: string; combined_score_pct: number; fit_tier: string }[];
-  curationRanks: { rank: number; style_name: string; reasoning: string }[];
-  regulatory: { zoning_district: string | null; historic_overlay: number | null; flood_zone: string | null; summary: string } | null;
-  neighborhood: { style_read: string; homes_visible: number; street_view_key: string | null } | null;
+  analysis: AnalysisSummary;
+  topMatches: TopMatch[];
+  curationRanks: CurationRank[];
+  regulatory: RegulatorySummary;
+  neighborhood: NeighborhoodSummary;
 };
+
+type AnalysisSummary = { house_type: string; roof_form: string; massing_envelope: string } | null;
+type RegulatorySummary = {
+  zoning_district: string | null;
+  historic_overlay: number | null;
+  flood_zone: string | null;
+  summary: string;
+} | null;
+type NeighborhoodSummary = { style_read: string; homes_visible: number; street_view_key: string | null } | null;
+type TopMatch = { name: string; combined_score_pct: number; fit_tier: string };
+type CurationRank = { rank: number; style_name: string; reasoning: string };
+
+// The evidence panel: structure, regulatory, neighborhood read and the
+// ranked style shortlist. Shared verbatim by the curation workspace and
+// the QC workspace on purpose — QC's whole job is re-checking the curator's
+// call, which is only meaningful against exactly the same evidence the
+// curator had in front of them.
+function PropertyContextBlocks({
+  analysis,
+  regulatory,
+  neighborhood,
+  topMatches,
+  curationRanks,
+}: {
+  analysis: AnalysisSummary;
+  regulatory: RegulatorySummary;
+  neighborhood: NeighborhoodSummary;
+  topMatches: TopMatch[];
+  curationRanks: CurationRank[];
+}) {
+  const [showFullRegulatory, setShowFullRegulatory] = useState(false);
+  if (!analysis) return null;
+
+  return (
+    <div className="section-block">
+      <h3>Structure</h3>
+      <p className="note">{analysis.house_type} — {analysis.roof_form} roof — {analysis.massing_envelope}</p>
+
+      {regulatory && (
+        <>
+          <h3 style={{ marginTop: 16 }}>Regulatory</h3>
+          <p className="note">
+            Zoning: {regulatory.zoning_district ?? "unknown"} — Historic overlay:{" "}
+            {regulatory.historic_overlay === null ? "unknown" : regulatory.historic_overlay ? "yes" : "no"} — Flood zone: {regulatory.flood_zone ?? "unknown"}
+          </p>
+          <button type="button" className="stat-link" onClick={() => setShowFullRegulatory((v) => !v)}>
+            {showFullRegulatory ? "Hide" : "Show"} full research &amp; sources
+          </button>
+          {showFullRegulatory && (
+            <p className="note" style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>{regulatory.summary}</p>
+          )}
+        </>
+      )}
+
+      {neighborhood && (
+        <>
+          <h3 style={{ marginTop: 16 }}>Neighborhood read</h3>
+          <p className="note">{neighborhood.style_read}</p>
+        </>
+      )}
+
+      {topMatches.length > 0 && (
+        <>
+          <h3 style={{ marginTop: 16 }}>Top matches</h3>
+          {curationRanks.length > 0 ? (
+            <>
+              <p className="note">AI-ranked starting point for curation.</p>
+              {curationRanks.map((r) => {
+                const m = topMatches.find((t) => t.name === r.style_name);
+                return (
+                  <div key={r.rank} className="empty-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 2 }}>
+                    <strong>
+                      {r.rank}. {r.style_name}
+                      {m && ` — ${m.combined_score_pct}% (${m.fit_tier})`}
+                    </strong>
+                    <span className="note">{r.reasoning}</span>
+                  </div>
+                );
+              })}
+            </>
+          ) : (
+            topMatches.map((m, i) => (
+              <div key={i} className="empty-row">{m.name} — {m.combined_score_pct}% ({m.fit_tier})</div>
+            ))
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 function slotLabel(slot: CurationSlot): string {
   const extras: string[] = [];
@@ -1834,7 +1982,7 @@ function JobCurationWorkspaceSection({
   const [error, setError] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [showFullRegulatory, setShowFullRegulatory] = useState(false);
+  const [sentToQc, setSentToQc] = useState(false);
 
   const load = useCallback(() => {
     fetch(`/api/admin/curation/${jobId}`)
@@ -1890,13 +2038,14 @@ function JobCurationWorkspaceSection({
         body: JSON.stringify({ assignments: toSubmit }),
       });
       const text = await r.text();
-      let parsed: { error?: string } | null = null;
+      let parsed: { error?: string; advancedOrders?: string[] } | null = null;
       try {
         parsed = JSON.parse(text);
       } catch {
         throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
       }
       if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+      setSentToQc((parsed?.advancedOrders ?? []).length > 0);
       setAssignments({});
       load();
       onSaved();
@@ -1915,6 +2064,13 @@ function JobCurationWorkspaceSection({
         <h1>{job.propertyAddress}</h1>
         <p>{unassigned.length} render{unassigned.length === 1 ? "" : "s"} waiting on a style.</p>
       </div>
+
+      {sentToQc && (
+        <p className="note">
+          Every render on this order now has a style — the order has moved to <strong>Quality Control</strong> and
+          is waiting in the QC Queue.
+        </p>
+      )}
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         {job.curbappealPhotoKey && (
@@ -1938,62 +2094,13 @@ function JobCurationWorkspaceSection({
         </p>
       )}
 
-      {analysis && (
-        <div className="section-block">
-          <h3>Structure</h3>
-          <p className="note">{analysis.house_type} — {analysis.roof_form} roof — {analysis.massing_envelope}</p>
-
-          {regulatory && (
-            <>
-              <h3 style={{ marginTop: 16 }}>Regulatory</h3>
-              <p className="note">
-                Zoning: {regulatory.zoning_district ?? "unknown"} — Historic overlay:{" "}
-                {regulatory.historic_overlay === null ? "unknown" : regulatory.historic_overlay ? "yes" : "no"} — Flood zone: {regulatory.flood_zone ?? "unknown"}
-              </p>
-              <button type="button" className="stat-link" onClick={() => setShowFullRegulatory((v) => !v)}>
-                {showFullRegulatory ? "Hide" : "Show"} full research &amp; sources
-              </button>
-              {showFullRegulatory && (
-                <p className="note" style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>{regulatory.summary}</p>
-              )}
-            </>
-          )}
-
-          {neighborhood && (
-            <>
-              <h3 style={{ marginTop: 16 }}>Neighborhood read</h3>
-              <p className="note">{neighborhood.style_read}</p>
-            </>
-          )}
-
-          {topMatches.length > 0 && (
-            <>
-              <h3 style={{ marginTop: 16 }}>Top matches</h3>
-              {curationRanks.length > 0 ? (
-                <>
-                  <p className="note">AI-ranked starting point for curation.</p>
-                  {curationRanks.map((r) => {
-                    const m = topMatches.find((t) => t.name === r.style_name);
-                    return (
-                      <div key={r.rank} className="empty-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 2 }}>
-                        <strong>
-                          {r.rank}. {r.style_name}
-                          {m && ` — ${m.combined_score_pct}% (${m.fit_tier})`}
-                        </strong>
-                        <span className="note">{r.reasoning}</span>
-                      </div>
-                    );
-                  })}
-                </>
-              ) : (
-                topMatches.map((m, i) => (
-                  <div key={i} className="empty-row">{m.name} — {m.combined_score_pct}% ({m.fit_tier})</div>
-                ))
-              )}
-            </>
-          )}
-        </div>
-      )}
+      <PropertyContextBlocks
+        analysis={analysis}
+        regulatory={regulatory}
+        neighborhood={neighborhood}
+        topMatches={topMatches}
+        curationRanks={curationRanks}
+      />
 
       {assignedAlready.length > 0 && (
         <div className="section-block">
@@ -2011,7 +2118,15 @@ function JobCurationWorkspaceSection({
           <h3>Assign styles</h3>
           {unassigned.map((s, i) => (
             <div key={s.id} className="empty-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
-              <strong>Curated render #{i + 1} <span className="note">— {slotLabel(s)}</span></strong>
+              <strong>
+                {s.tier === "premium" ? "Premium" : "Curated"} render #{i + 1}{" "}
+                <span className="note">— {slotLabel(s)}</span>
+              </strong>
+              {s.tier === "premium" && (
+                <span className="note" style={{ whiteSpace: "pre-wrap" }}>
+                  Customer&apos;s request: {s.custom_text || "(none provided)"}
+                </span>
+              )}
               <select value={assignments[s.id] ?? ""} onChange={(e) => setAssignment(s.id, e.target.value)}>
                 <option value="">Select a style…</option>
                 {curationRanks.length > 0 && (
@@ -2046,6 +2161,319 @@ function JobCurationWorkspaceSection({
             {saving ? "Saving…" : "Save Assignments"}
           </button>
         </div>
+      )}
+    </>
+  );
+}
+
+type QcQueueRow = {
+  job_id: string;
+  property_address: string;
+  curbappeal_photo_key: string | null;
+  render_count: number;
+  oldest_order_at: string;
+};
+
+function QcQueueSection({ onOpenJob }: { onOpenJob: (jobId: string) => void }) {
+  const [jobs, setJobs] = useState<QcQueueRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    fetch("/api/admin/qc")
+      .then(async (r) => {
+        const text = await r.text();
+        let parsed: { jobs?: QcQueueRow[]; error?: string } | null = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+        return parsed as { jobs: QcQueueRow[] };
+      })
+      .then((d) => setJobs(d.jobs ?? []))
+      .catch((e: Error) => setError(`Failed to load QC queue: ${e.message}`));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return (
+    <>
+      <div className="page-head">
+        <div className="eyebrow">Quality Control</div>
+        <h1>QC Queue</h1>
+        <p>Curated orders waiting to be checked and turned into render instructions. Oldest first.</p>
+      </div>
+
+      {error && <p className="error-text">{error}</p>}
+      {!jobs && !error && <p className="loading">Loading…</p>}
+      {jobs && jobs.length === 0 && <p className="loading">Nothing waiting on QC right now.</p>}
+
+      {jobs && jobs.length > 0 && (
+        <div className="section-block">
+          <table className="data">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Address</th>
+                <th>Renders</th>
+                <th>Waiting since</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.map((j) => (
+                <tr key={j.job_id} className="clickable" onClick={() => onOpenJob(j.job_id)}>
+                  <td>
+                    {j.curbappeal_photo_key ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img className="order-thumb" src={`/api/admin/media/${j.curbappeal_photo_key}`} alt="" />
+                    ) : (
+                      <div className="order-thumb order-thumb-empty" />
+                    )}
+                  </td>
+                  <td>{j.property_address}</td>
+                  <td>{j.render_count}</td>
+                  <td>{new Date(j.oldest_order_at).toLocaleString()}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <button
+                      className="btn-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenJob(j.job_id);
+                      }}
+                    >
+                      Check Now
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+type BuiltPrompt = {
+  orderItemId: string;
+  styleId: string;
+  styleName: string;
+  tier: string;
+  assembledPrompt: string;
+  negativePrompt: string;
+  templateVersion: string;
+};
+
+type QcWorkspaceData = {
+  job: { id: string; propertyAddress: string; curbappealPhotoKey: string | null };
+  slots: CurationSlot[];
+  prompts: BuiltPrompt[];
+  analysis: AnalysisSummary;
+  topMatches: TopMatch[];
+  curationRanks: CurationRank[];
+  regulatory: RegulatorySummary;
+  neighborhood: NeighborhoodSummary;
+};
+
+function QcWorkspaceSection({
+  jobId,
+  onBack,
+  onApproved,
+}: {
+  jobId: string;
+  onBack: () => void;
+  onApproved: () => void;
+}) {
+  const [data, setData] = useState<QcWorkspaceData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // Prompt text is editable: the builder's output is a starting point the
+  // reviewer is expected to tighten, and whatever they approve is what
+  // gets recorded as the instruction production actually worked from.
+  const [edited, setEdited] = useState<Record<string, string>>({});
+  const [approving, setApproving] = useState(false);
+  const [approved, setApproved] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    fetch(`/api/admin/qc/${jobId}`)
+      .then(async (r) => {
+        const text = await r.text();
+        let parsed: (QcWorkspaceData & { error?: string }) | null = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+        return parsed as QcWorkspaceData;
+      })
+      .then((d) => setData(d))
+      .catch((e: Error) => setError(`Failed to load QC workspace: ${e.message}`));
+  }, [jobId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (error) return <p className="error-text">{error}</p>;
+  if (!data) return <p className="loading">Loading…</p>;
+
+  const { job, slots, prompts, analysis, topMatches, curationRanks, regulatory, neighborhood } = data;
+
+  function promptText(p: BuiltPrompt): string {
+    return edited[p.orderItemId] ?? p.assembledPrompt;
+  }
+
+  async function copyPrompt(p: BuiltPrompt) {
+    try {
+      await navigator.clipboard.writeText(promptText(p));
+      setCopiedId(p.orderItemId);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (e) {
+      setError(`Could not copy to clipboard: ${(e as Error).message}`);
+    }
+  }
+
+  async function approve() {
+    setApproving(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/admin/qc/${jobId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompts: prompts.map((p) => ({
+            orderItemId: p.orderItemId,
+            assembledPrompt: promptText(p),
+            negativePrompt: p.negativePrompt,
+          })),
+        }),
+      });
+      const text = await r.text();
+      let parsed: { error?: string } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+      setApproved(true);
+      onApproved();
+    } catch (e) {
+      setError(`Failed to approve: ${(e as Error).message}`);
+    } finally {
+      setApproving(false);
+    }
+  }
+
+  return (
+    <>
+      <button className="back-link" onClick={onBack}>← Back to QC Queue</button>
+      <div className="page-head">
+        <div className="eyebrow">Quality Control</div>
+        <h1>{job.propertyAddress}</h1>
+        <p>{prompts.length} render{prompts.length === 1 ? "" : "s"} to check and instruct.</p>
+      </div>
+
+      {approved && (
+        <p className="note">
+          Approved — prompts recorded and this order has moved to <strong>production</strong>. It has left the QC
+          queue.
+        </p>
+      )}
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        {job.curbappealPhotoKey && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="detail-photo" src={`/api/admin/media/${job.curbappealPhotoKey}`} alt="Uploaded property photo" />
+        )}
+        {neighborhood?.street_view_key && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            className="detail-photo"
+            src={`/api/admin/media/${neighborhood.street_view_key}`}
+            alt="Street View of the surrounding block"
+          />
+        )}
+      </div>
+
+      {!analysis && (
+        <p className="note">
+          No analysis was run on this property, so there is no ranked shortlist to check the curator&apos;s choice
+          against — the render instructions below fall back to preserving everything structural in the photo.
+        </p>
+      )}
+
+      <PropertyContextBlocks
+        analysis={analysis}
+        regulatory={regulatory}
+        neighborhood={neighborhood}
+        topMatches={topMatches}
+        curationRanks={curationRanks}
+      />
+
+      <div className="section-block">
+        <h3>Curator&apos;s selections</h3>
+        {slots.map((s) => (
+          <div key={s.id} className="empty-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 2 }}>
+            <strong>
+              {s.tier === "premium" ? "Premium" : "Curated"} — {s.style_name || "no style assigned"}
+            </strong>
+            <span className="note">{slotLabel(s)}</span>
+            {s.tier === "premium" && s.custom_text && (
+              <span className="note" style={{ whiteSpace: "pre-wrap" }}>
+                Customer&apos;s request: {s.custom_text}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="section-block">
+        <h3>Render instructions</h3>
+        <p className="note">
+          Generated from the style catalog and this house&apos;s measured structure. Edit anything that needs
+          tightening, copy it into the image generator, then approve — the text you approve is what gets recorded
+          as the instruction for this render.
+        </p>
+
+        {prompts.length === 0 && (
+          <p className="note">No render on this job has a style assigned yet, so there is nothing to instruct.</p>
+        )}
+
+        {prompts.map((p, i) => (
+          <div key={p.orderItemId} style={{ marginTop: 18 }}>
+            <strong>
+              Render #{i + 1} — {p.styleName}{" "}
+              <span className="note">({p.tier === "premium" ? "Premium" : "Curated"})</span>
+            </strong>
+            <textarea
+              className="prompt-box"
+              value={promptText(p)}
+              onChange={(e) => setEdited((cur) => ({ ...cur, [p.orderItemId]: e.target.value }))}
+              rows={18}
+            />
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 6 }}>
+              <button type="button" className="btn-primary" onClick={() => copyPrompt(p)}>
+                {copiedId === p.orderItemId ? "Copied" : "Copy prompt"}
+              </button>
+              <span className="note">Template {p.templateVersion}</span>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <span className="note">Negative prompt (avoid): {p.negativePrompt}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {prompts.length > 0 && !approved && (
+        <button className="btn-primary" type="button" onClick={approve} disabled={approving} style={{ marginTop: 16 }}>
+          {approving ? "Approving…" : "Approve & Send to Production"}
+        </button>
       )}
     </>
   );

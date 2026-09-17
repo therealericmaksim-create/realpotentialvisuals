@@ -61,8 +61,15 @@
 .rpv-admin .bell .pip{position:absolute;top:6px;right:7px;width:7px;height:7px;border-radius:50%;
   background:var(--leg);border:1.5px solid var(--panel)}
 
-.rpv-admin .staff-badge{display:flex;align-items:center;gap:10px;padding:5px 12px 5px 5px;
-  background:var(--panel-2);border:1px solid var(--border);border-radius:20px}
+.rpv-admin .staff-badge{position:relative;display:flex;align-items:center;gap:10px;padding:5px 12px 5px 5px;
+  background:var(--panel-2);border:1px solid var(--border);border-radius:20px;cursor:pointer}
+.rpv-admin .staff-menu{position:absolute;top:calc(100% + 8px);right:0;min-width:140px;
+  background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:6px;
+  box-shadow:0 8px 24px rgba(0,0,0,.35);z-index:50}
+.rpv-admin .staff-menu-item{display:block;width:100%;text-align:left;background:none;border:none;
+  color:var(--text);font-size:13px;font-family:inherit;padding:8px 10px;border-radius:6px;
+  text-decoration:none;cursor:pointer}
+.rpv-admin .staff-menu-item:hover{background:var(--panel-3)}
 .rpv-admin .avatar{width:26px;height:26px;border-radius:50%;background:var(--exec);color:#14171A;
   font-family:var(--plate);font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;
   object-fit:cover;flex:none}
@@ -164,6 +171,9 @@
   padding:7px 10px;font-size:13px;font-family:inherit}
 
 /* users: role checkboxes + edit-roles modal */
+.rpv-admin .prompt-box{width:100%;margin-top:6px;background:var(--panel-3);border:1px solid var(--border);
+  border-radius:6px;color:var(--text);padding:10px 12px;font-family:var(--plate);font-size:12px;
+  line-height:1.55;white-space:pre-wrap;resize:vertical}
 .rpv-admin .role-checkbox-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
 .rpv-admin .role-checkbox{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text-dim);
   text-transform:capitalize;cursor:pointer}

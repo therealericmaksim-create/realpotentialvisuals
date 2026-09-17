@@ -35,11 +35,11 @@ export type Phase2RunResult = {
   reused: boolean;
   logs: AiCallLog[];
   totalCostUsd: number;
-  // null when the order has no curated-tier render to judge — self_directed
-  // (customer already picked their style) and premium (a custom request,
-  // not matched against the catalog) don't need an AI vote or a
-  // curator/algorithm consensus, so steps 18 and 20 are skipped entirely
-  // rather than spending an AI call on a question nobody's asking.
+  // null when the order has no curated- or premium-tier render to judge —
+  // a self_directed-only order needs no AI vote or curator/algorithm
+  // consensus (that customer already picked their style), so steps 18 and
+  // 20 are skipped entirely rather than spending an AI call on a question
+  // nobody's asking.
   consensus: {
     primaryStyleId: string | null;
     primaryStyleName: string | null;
@@ -83,18 +83,21 @@ export async function runPhase2Analysis(
   if (!order.property_id) throw new Error(`Order has no linked property yet: ${orderId}`);
   if (!order.curbappeal_photo_key) throw new Error(`Order has no photo: ${orderId}`);
 
-  // A curated-tier render is the only reason to run the AI vote / consensus
-  // steps (18, 20) — self_directed already has its style, premium isn't
-  // matched against the catalog at all. No order_items rows at all (e.g. a
-  // pre-v0.10.0 legacy order) falls back to running the full pipeline,
-  // matching the behavior every order had before tiers existed.
+  // Curated and premium renders both reach a curator who has to pick a
+  // catalog style, so both are a reason to run the AI vote / consensus
+  // steps (18, 20) that produce the ranked shortlist that curator works
+  // from. Only self_directed skips them — that customer already chose
+  // their own style. No order_items rows at all (e.g. a pre-v0.10.0
+  // legacy order) falls back to running the full pipeline, matching the
+  // behavior every order had before tiers existed.
   const orderItemTiers = await env.DB.prepare(
     `SELECT tier FROM order_items WHERE order_id = ?`
   )
     .bind(orderId)
     .all<{ tier: string }>();
   const tierRows = orderItemTiers.results ?? [];
-  const needsCuration = tierRows.length === 0 || tierRows.some((r) => r.tier === "curated");
+  const needsCuration =
+    tierRows.length === 0 || tierRows.some((r) => r.tier === "curated" || r.tier === "premium");
 
   const zoneResolution = await resolveClimateZoneId(env.DB, order.property_address);
   if (!zoneResolution) {

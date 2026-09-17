@@ -3,6 +3,70 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.18.0 — 2026-09-17
+
+- **Premium renders now go through curation**, alongside curated. Premium
+  customers never pick a style either — they write a free-text request —
+  so a human has to choose the catalog style that request gets built
+  from. Every curated-only gate became `tier IN ('curated','premium')`:
+  the Curation Queue, the dashboard's Awaiting Curation count, the
+  server-side "is there anything to push" guard, the curation workspace's
+  slot list, and the assignment `UPDATE`. The workspace now shows the
+  customer's own written request above the style picker for premium
+  slots, and `lib/analysis/orchestrator.ts` runs the AI vote/consensus
+  steps for premium too — previously a premium-only order got no ranked
+  shortlist even after analysis, leaving the curator with nothing.
+  Self-directed still skips curation entirely (that customer picked their
+  own style at checkout) and is deliberately deferred work.
+- **Fixed: finishing curation left an order stranded.** Saving style
+  assignments wrote the styles but never changed the order's status, so
+  it stayed at `in_curation` — which dropped it out of the Curation Queue
+  (that query requires an *unassigned* item) while putting it in no other
+  queue. A fully-curated order silently disappeared from the admin. An
+  order with no curated/premium render left unassigned now advances to
+  `in_qc` and logs a `sent_to_qc` event.
+- **Built the QC Queue and QC workspace** (`GET /api/admin/qc`, `GET|POST
+  /api/admin/qc/[jobId]`). The queue lists orders at `in_qc` with a
+  "Check Now" button. The workspace shows the same evidence panel the
+  curator saw — structure, regulatory, neighborhood read, AI-ranked
+  shortlist — because QC's job is re-checking the curator's call, which
+  is only meaningful against identical information; that panel is now a
+  shared `PropertyContextBlocks` component rather than two copies that
+  could drift. Below it: the curator's selections, then the assembled
+  render instruction per render. Approving records the final text in
+  `prompt_generations` and moves the order to `in_progress`.
+- **New `lib/renderPrompt.ts` assembles the render instruction** from the
+  catalog the Python pipeline already seeded — a deterministic template
+  fill, not an AI call, since renders are produced by hand in Midjourney.
+  It is built around a hard structure/style split, because the product
+  promise is "your actual house, restyled": every measured structural
+  fact (massing, storey count, roof form and pitch, symmetry, window-to-
+  wall ratio, foundation visibility, chimney, facade width) is stated as
+  must-not-change along with camera position and surroundings, while the
+  style's own `style_materials_typical` (primary/accent/trim) and
+  `style_design_elements` (required/optional) drive what may change. It
+  also lists the design elements detected on this specific house, telling
+  the model to replace conflicts rather than leave a mix, and folds in
+  premium custom text and night/seasonal/holiday extras. Ships with a
+  negative prompt covering the real failure modes (redesigned house,
+  moved openings, changed roof pitch, different camera angle).
+  Prompts are rebuilt from the catalog on every load — a stale saved
+  prompt is worse than none — and the reviewer can edit before approving.
+- **Fixed: the dashboard's Awaiting QC count could never be non-zero.**
+  It counted `renders WHERE qc_status = 'pending'`, but nothing creates
+  `renders` rows until an operator generates images by hand, so it read 0
+  forever while QC work piled up unseen. It now counts orders at `in_qc`,
+  matching the queue's own definition — the same bug class as the old
+  Awaiting Curation count.
+- Added a logout menu to the admin header: clicking the staff badge opens
+  a dropdown with **Log out**, pointing at `/cdn-cgi/access/logout` (a
+  path Cloudflare intercepts at the edge) to clear the Access session.
+  Previously there was no way to sign out of the admin at all short of
+  clearing cookies.
+- Homepage copy fix: two places claimed every tier receives the same full
+  quality review. Only Curated and Premium do — Self-Directed is
+  automated end to end, so the claim was untrue as written.
+
 ## v0.17.0 — 2026-09-17
 
 - `/start` now requires signing in with Google before anything can be

@@ -33,23 +33,31 @@ export async function GET() {
       db
         .prepare(
           // Same definition as /api/admin/curation's own query: a job
-          // needs curation when it has at least one 'curated'-tier render
-          // still unassigned (style_id IS NULL) on an order explicitly
-          // pushed to curation (status = 'in_curation') — self_directed
-          // and premium never enter this queue at all. Deliberately NOT
-          // keyed off the old `curations` table (that table modeled the
-          // pre-v0.10.0 fixed-package "12 candidates, 3 included" bundle
-          // and was never updated for per-render pricing; it's
-          // dead/unused now, left in place rather than dropped).
+          // needs curation when it has at least one curated- or
+          // premium-tier render still unassigned (style_id IS NULL) on an
+          // order explicitly pushed to curation (status = 'in_curation') —
+          // only self_directed skips the queue, since that customer picked
+          // their own style at checkout. Deliberately NOT keyed off the old
+          // `curations` table (that table modeled the pre-v0.10.0 fixed-
+          // package "12 candidates, 3 included" bundle and was never
+          // updated for per-render pricing; it's dead/unused now, left in
+          // place rather than dropped).
           `SELECT COUNT(DISTINCT j.id) as n
            FROM jobs j
            JOIN orders o ON o.job_id = j.id
            JOIN order_items oi ON oi.order_id = o.id
-           WHERE oi.tier = 'curated' AND oi.style_id IS NULL AND o.status = 'in_curation'`
+           WHERE oi.tier IN ('curated','premium') AND oi.style_id IS NULL AND o.status = 'in_curation'`
         )
         .first<{ n: number }>(),
       db
-        .prepare(`SELECT COUNT(*) as n FROM renders WHERE qc_status = 'pending'`)
+        // Same definition as /api/admin/qc's own query: an order sits at
+        // 'in_qc' from the moment curation assigns its last style until a
+        // reviewer approves it into production. Deliberately NOT keyed off
+        // `renders.qc_status` — no render row exists until an operator has
+        // generated images by hand, so that count read 0 forever while
+        // real QC work waited, the same way "Awaiting Curation" once
+        // counted a dead table.
+        .prepare(`SELECT COUNT(*) as n FROM orders WHERE status = 'in_qc'`)
         .first<{ n: number }>(),
       db
         .prepare(`SELECT COUNT(*) as n FROM custom_requests WHERE status = 'awaiting_quote'`)

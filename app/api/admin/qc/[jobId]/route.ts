@@ -1,18 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
+import {
+  buildRenderPrompts,
+  PROMPT_GENERATION_MODE,
+  PROMPT_TEMPLATE_VERSION,
+  type PromptSlot,
+} from "@/lib/renderPrompt";
+
+// The QC workspace ("Check Now"): everything the curator saw, so the
+// reviewer can second-guess the style choice against the same evidence,
+// plus the assembled image-generation instruction for each ordered render.
+// Prompts are rebuilt fresh on every GET rather than read back from
+// prompt_generations — the catalog and the structure profile are the
+// source of truth, and a stale saved prompt is worse than no saved prompt.
+// Saved copies are written on approval, as the audit record of what was
+// actually sent to production.
 
 type Params = { params: Promise<{ jobId: string }> };
 
-type CurationSlot = {
+type SlotRow = {
   id: string;
   order_id: string;
   tier: string;
   style_id: string | null;
   style_name: string;
-  // Premium only: the customer's own free-text description of what they
-  // want. The curator reads this and picks the catalog style to build it
-  // from — premium never arrives with a style already chosen.
   custom_text: string | null;
   night: number;
   seasonal: number;
@@ -38,9 +50,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   if (!job) return NextResponse.json({ error: "job not found" }, { status: 404 });
 
-  // Most recent order on this job that actually has a photo — in practice
-  // there's one order per job today, but this stays correct if that ever
-  // changes (a repeat customer ordering more curated renders later).
   const photoRow = await env.DB.prepare(
     `SELECT curbappeal_photo_key FROM orders
      WHERE job_id = ? AND curbappeal_photo_key IS NOT NULL
@@ -57,7 +66,27 @@ export async function GET(_req: NextRequest, { params }: Params) {
      ORDER BY oi.rowid ASC`
   )
     .bind(jobId)
-    .all<CurationSlot>();
+    .all<SlotRow>();
+
+  const slotRows = slots.results ?? [];
+
+  const promptSlots: PromptSlot[] = slotRows
+    .filter((s): s is SlotRow & { style_id: string } => Boolean(s.style_id))
+    .map((s) => ({
+      orderItemId: s.id,
+      tier: s.tier,
+      styleId: s.style_id,
+      styleName: s.style_name,
+      customText: s.custom_text,
+      night: s.night,
+      seasonal: s.seasonal,
+      seasonChoice: s.season_choice,
+      holiday: s.holiday,
+      holidayChoice: s.holiday_choice,
+      breakdown: s.breakdown,
+    }));
+
+  const prompts = await buildRenderPrompts(env.DB, jobId, job.property_id, promptSlots);
 
   const analysis = await env.DB.prepare(
     `SELECT psa.structure_profile_id, sp.house_type, sp.roof_form, sp.massing_envelope
@@ -102,8 +131,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
     .first<{ style_read: string; homes_visible: number; street_view_key: string | null }>();
 
   return NextResponse.json({
-    job: { id: job.id, propertyAddress: job.property_address, curbappealPhotoKey: photoRow?.curbappeal_photo_key ?? null },
-    slots: slots.results ?? [],
+    job: {
+      id: job.id,
+      propertyAddress: job.property_address,
+      curbappealPhotoKey: photoRow?.curbappeal_photo_key ?? null,
+    },
+    slots: slotRows,
+    prompts,
     analysis,
     topMatches: topMatches?.results ?? [],
     curationRanks: curationRanks?.results ?? [],
@@ -112,86 +146,86 @@ export async function GET(_req: NextRequest, { params }: Params) {
   });
 }
 
-type Assignment = { orderItemId: string; styleName: string };
-type SubmitBody = { assignments?: Assignment[] };
+type ApproveBody = {
+  prompts?: { orderItemId: string; assembledPrompt: string; negativePrompt: string }[];
+};
 
+// Approving is the QC sign-off: it records the exact prompt text the
+// reviewer settled on (they can edit what the builder produced before
+// approving) and moves every in_qc order on this job to 'in_progress',
+// which is what takes it out of this queue and into production.
 export async function POST(req: NextRequest, { params }: Params) {
   const staff = await getCurrentStaff();
   if (!staff) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
 
   const { jobId } = await params;
-  const body = (await req.json()) as SubmitBody;
-  const assignments = body.assignments ?? [];
-  if (assignments.length === 0) {
-    return NextResponse.json({ error: "assignments required" }, { status: 400 });
-  }
+  const body = (await req.json()) as ApproveBody;
+  const submitted = body.prompts ?? [];
 
   const { env } = getCloudflareContext();
   const now = new Date().toISOString();
-  const applied: { orderItemId: string; styleId: string; styleName: string }[] = [];
 
-  for (const a of assignments) {
-    const style = await env.DB.prepare(`SELECT id FROM styles WHERE name = ?`).bind(a.styleName).first<{ id: string }>();
-    if (!style) continue; // unknown style name — skip rather than fail the whole batch
-
-    // Scoped to this job's own order_items so a stray/tampered orderItemId
-    // from another job can never be written through this route.
-    const result = await env.DB.prepare(
-      `UPDATE order_items SET style_id = ?, style_name = ?
-       WHERE id = ? AND tier IN ('curated','premium') AND order_id IN (SELECT id FROM orders WHERE job_id = ?)`
-    )
-      .bind(style.id, a.styleName, a.orderItemId, jobId)
-      .run();
-
-    if (result.meta.changes > 0) {
-      applied.push({ orderItemId: a.orderItemId, styleId: style.id, styleName: a.styleName });
-    }
-  }
-
-  if (applied.length === 0) {
-    return NextResponse.json({ ok: true, applied: 0, advancedOrders: [] });
-  }
-
-  await env.DB.prepare(
-    `INSERT INTO events (id, entity_type, entity_id, event_type, actor_type, actor_id, payload, created_at)
-     VALUES (?, 'job', ?, 'curated', 'staff', ?, ?, ?)`
-  )
-    .bind(crypto.randomUUID(), jobId, staff.id, JSON.stringify({ assignments: applied }), now)
-    .run();
-
-  // Curation is finished for an order the moment it has no curated/premium
-  // render left without a style — that's what moves it on to QC. Without
-  // this the order stayed at 'in_curation' forever: it dropped out of the
-  // Curation Queue (which also requires an unassigned item) but never
-  // appeared anywhere else, so a fully-curated order silently vanished
-  // from every queue in the admin.
-  const advancedOrders: string[] = [];
   const orders = await env.DB.prepare(
-    `SELECT id FROM orders WHERE job_id = ? AND status = 'in_curation'`
+    `SELECT id FROM orders WHERE job_id = ? AND status = 'in_qc'`
   )
     .bind(jobId)
     .all<{ id: string }>();
+  const orderRows = orders.results ?? [];
 
-  for (const o of orders.results ?? []) {
-    const remaining = await env.DB.prepare(
-      `SELECT COUNT(*) as n FROM order_items
-       WHERE order_id = ? AND tier IN ('curated','premium') AND style_id IS NULL`
+  if (orderRows.length === 0) {
+    return NextResponse.json(
+      { error: "No order on this job is awaiting QC — it may have already been approved." },
+      { status: 400 }
+    );
+  }
+
+  // Only persist prompts for render slots that really belong to this job,
+  // so a tampered orderItemId can't write a prompt_generations row against
+  // someone else's job.
+  for (const p of submitted) {
+    const slot = await env.DB.prepare(
+      `SELECT oi.style_id FROM order_items oi JOIN orders o ON o.id = oi.order_id
+       WHERE oi.id = ? AND o.job_id = ? AND oi.style_id IS NOT NULL`
     )
-      .bind(o.id)
-      .first<{ n: number }>();
-    if (remaining && remaining.n > 0) continue;
+      .bind(p.orderItemId, jobId)
+      .first<{ style_id: string }>();
+    if (!slot) continue;
 
-    await env.DB.prepare(`UPDATE orders SET status = 'in_qc', updated_at = ? WHERE id = ?`)
+    await env.DB.prepare(
+      `INSERT INTO prompt_generations
+         (id, job_id, style_id, generation_mode, assembled_prompt, negative_prompt, template_version, generated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+      .bind(
+        crypto.randomUUID(),
+        jobId,
+        slot.style_id,
+        PROMPT_GENERATION_MODE,
+        p.assembledPrompt,
+        p.negativePrompt,
+        PROMPT_TEMPLATE_VERSION,
+        now
+      )
+      .run();
+  }
+
+  for (const o of orderRows) {
+    await env.DB.prepare(`UPDATE orders SET status = 'in_progress', updated_at = ? WHERE id = ?`)
       .bind(now, o.id)
       .run();
     await env.DB.prepare(
       `INSERT INTO events (id, entity_type, entity_id, event_type, actor_type, actor_id, payload, created_at)
-       VALUES (?, 'order', ?, 'sent_to_qc', 'staff', ?, ?, ?)`
+       VALUES (?, 'order', ?, 'qc_approved', 'staff', ?, ?, ?)`
     )
-      .bind(crypto.randomUUID(), o.id, staff.id, JSON.stringify({ from: "in_curation" }), now)
+      .bind(
+        crypto.randomUUID(),
+        o.id,
+        staff.id,
+        JSON.stringify({ promptsSaved: submitted.length }),
+        now
+      )
       .run();
-    advancedOrders.push(o.id);
   }
 
-  return NextResponse.json({ ok: true, applied: applied.length, advancedOrders });
+  return NextResponse.json({ ok: true, approvedOrders: orderRows.length, promptsSaved: submitted.length });
 }
