@@ -834,20 +834,6 @@ function StartPageInner() {
       <SiteHeader />
       <div className="configurator">
       <div className="head">
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, fontSize: 13, marginBottom: 4 }}>
-          <span>Signed in as {identity.name || identity.email}</span>
-          <button
-            type="button"
-            onClick={() =>
-              fetch("/api/auth/logout", { method: "POST" }).then(() => {
-                setIdentity(null);
-              })
-            }
-            style={{ background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}
-          >
-            Not you? Sign out
-          </button>
-        </div>
         <div className="eyebrow">Start Your Order</div>
         <h1>Upload Your Photo &amp; Build Your Order</h1>
         <p>

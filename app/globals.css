@@ -85,6 +85,16 @@ header{
   color: var(--white);
 }
 .nav-links a:hover{ color: var(--gold); }
+.nav-identity{
+  font-family: var(--font-head); font-size: 13px; font-weight: 600;
+  color: var(--white); white-space: nowrap;
+}
+.nav-logout{
+  font-family: inherit; font-size: inherit; font-weight: inherit;
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--gold); letter-spacing: .04em;
+}
+.nav-logout:hover{ text-decoration: underline; }
 
 /* mobile menu — pure CSS, no JavaScript needed */
 .nav-toggle{ display: none; }

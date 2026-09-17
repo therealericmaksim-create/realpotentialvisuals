@@ -1,4 +1,5 @@
 import Link from "next/link";
+import HeaderIdentity from "./HeaderIdentity";
 
 // Shared across every page. Links use "/#section" (not "#section") so they
 // correctly jump to the homepage's sections even from a different page like
@@ -28,6 +29,7 @@ export default function SiteHeader() {
           >
             Order Now
           </a>
+          <HeaderIdentity />
         </div>
       </nav>
     </header>

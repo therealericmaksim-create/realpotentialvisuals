@@ -3,6 +3,16 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.18.1 — 2026-09-17
+
+- Moved the customer's signed-in identity out of the `/start` page body
+  and into the site header, to the right of Order Now, as
+  `Name - LOGOUT`. New `components/HeaderIdentity.tsx` (client) renders
+  nothing at all when signed out, so the header is unchanged for the many
+  visitors who never sign in. Signing out reloads the page rather than
+  just clearing local state, since `/start` reads the session on mount
+  and has to fall back to its sign-in gate.
+
 ## v0.18.0 — 2026-09-17
 
 - **Premium renders now go through curation**, alongside curated. Premium
