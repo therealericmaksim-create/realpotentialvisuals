@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { reserveDailyIntakeSlot } from "@/lib/capacity";
 import { createOrderWithItems, type RenderItemInput } from "@/lib/orders";
+import { getConfigValue } from "@/lib/systemConfig";
+import { verifyCustomerSession, CUSTOMER_SESSION_COOKIE } from "@/lib/customerAuth";
 
 // Persists the /start form into the orders/order_items tables. The total is
 // recomputed here from the submitted selections against lib/pricing.ts —
@@ -28,8 +30,21 @@ type CreateOrderBody = {
 };
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json()) as CreateOrderBody;
   const { env } = getCloudflareContext();
+
+  // The security boundary, not the /start UI gate: an order can only
+  // ever be created for the customer who actually signed in, verified
+  // fresh here server-side — never trust a client-submitted email for
+  // this, same principle as pricing never trusting a client-submitted
+  // total.
+  const sessionSecret = await getConfigValue(env.DB, "CUSTOMER_SESSION_SECRET", undefined);
+  const sessionToken = req.cookies.get(CUSTOMER_SESSION_COOKIE)?.value ?? null;
+  const identity = await verifyCustomerSession(sessionToken, sessionSecret);
+  if (!identity) {
+    return NextResponse.json({ error: "Sign in with Google to place an order" }, { status: 401 });
+  }
+
+  const body = (await req.json()) as CreateOrderBody;
 
   const { orderId } = await createOrderWithItems(env.DB, {
     curbappealPhotoKey: body.curbappealPhotoKey,
@@ -41,6 +56,8 @@ export async function POST(req: NextRequest) {
     renderItems: body.renderItems,
     logoSelected: body.logoSelected,
     status: "started",
+    customerEmail: identity.email,
+    customerGoogleAccountId: identity.googleAccountId,
   });
 
   return NextResponse.json({ orderId, status: "started" });

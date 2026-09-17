@@ -1,8 +1,9 @@
 "use client";
 
-import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
+import SiteFooter from "@/components/SiteFooter";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { STYLE_FAMILIES } from "@/lib/styles";
 import { AI_DISCLOSURE_TEXT } from "@/lib/disclosure";
@@ -43,6 +44,8 @@ const DEFAULT_PRICING: PricingConfig = {
   logoPrice: DEFAULT_LOGO_PRICE,
   structuralBreakdownPrice: DEFAULT_STRUCTURAL_BREAKDOWN_PRICE,
 };
+
+type CustomerIdentity = { email: string; name: string | null; pictureUrl: string | null };
 
 const EXTRA_KEYS: ExtraKey[] = ["night", "seasonal", "holiday"];
 const RENDER_TIERS: RenderTier[] = ["self_directed", "curated", "premium"];
@@ -187,6 +190,24 @@ function StartPageInner() {
     window.addEventListener("pageshow", handlePageShow);
     return () => window.removeEventListener("pageshow", handlePageShow);
   }, []);
+
+  // Sign-in is required before anything on this page can be submitted —
+  // /api/order rejects order creation server-side without a verified
+  // session regardless of what this page shows, so this state is UX
+  // only, never the actual security boundary. `undefined` = still
+  // checking, `null` = signed out, object = signed in.
+  const [identity, setIdentity] = useState<CustomerIdentity | null | undefined>(undefined);
+
+  const loadIdentity = useCallback(() => {
+    fetch("/api/auth/me")
+      .then((res) => res.json() as Promise<{ identity: CustomerIdentity | null }>)
+      .then((data) => setIdentity(data.identity))
+      .catch(() => setIdentity(null));
+  }, []);
+
+  useEffect(() => {
+    loadIdentity();
+  }, [loadIdentity]);
 
   const [pricing, setPricing] = useState<PricingConfig>(DEFAULT_PRICING);
 
@@ -454,14 +475,23 @@ function StartPageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      if (res.status === 401) {
+        // Session expired/cleared while filling out the form — re-check
+        // identity (flips the page back to the sign-in gate) rather than
+        // a generic failure message.
+        loadIdentity();
+        throw new Error("Your session expired — please sign in again.");
+      }
       if (!res.ok) throw new Error("failed");
       const data = (await res.json()) as { orderId: string; status: string };
       setOrderId(data.orderId);
       setOrderStatus(data.status);
       setStep("disclosure");
-    } catch {
+    } catch (e) {
       setOrderCreateError(
-        "Could not save your order — check your connection and try again."
+        e instanceof Error && e.message.includes("session")
+          ? e.message
+          : "Could not save your order — check your connection and try again."
       );
     } finally {
       setCreatingOrder(false);
@@ -619,6 +649,7 @@ function StartPageInner() {
             </button>
           </div>
         </div>
+        <SiteFooter />
       </>
     );
   }
@@ -635,6 +666,7 @@ function StartPageInner() {
             <div className="flow-note">Not built yet.</div>
           </div>
         </div>
+        <SiteFooter />
       </>
     );
   }
@@ -660,6 +692,7 @@ function StartPageInner() {
             )}
           </div>
         </div>
+        <SiteFooter />
       </>
     );
   }
@@ -681,6 +714,7 @@ function StartPageInner() {
             </button>
           </div>
         </div>
+        <SiteFooter />
       </>
     );
   }
@@ -715,6 +749,7 @@ function StartPageInner() {
             )}
           </div>
         </div>
+        <SiteFooter />
       </>
     );
   }
@@ -740,6 +775,56 @@ function StartPageInner() {
             </button>
           </div>
         </div>
+        <SiteFooter />
+      </>
+    );
+  }
+
+  const authError = searchParams.get("auth_error");
+
+  if (identity === undefined) {
+    return (
+      <>
+        <SiteHeader />
+        <div className="flow-page">
+          <div className="flow-wrap">
+            <div className="flow-spinner" />
+          </div>
+        </div>
+        <SiteFooter />
+      </>
+    );
+  }
+
+  if (identity === null) {
+    return (
+      <>
+        <SiteHeader />
+        <div className="flow-page">
+          <div className="flow-wrap">
+            <div className="eyebrow">Before You Start</div>
+            <h1>Sign In With Google</h1>
+            <p>
+              We ask for this up front so we always have a way to reach you about your order — before, during,
+              and after processing.
+            </p>
+            {authError && (
+              <div className="cfg-error">
+                {authError === "not_configured"
+                  ? "Sign-in isn't configured yet — please check back shortly."
+                  : "Something went wrong signing you in. Please try again."}
+              </div>
+            )}
+            <a
+              className="cfg-continue"
+              href={`/api/auth/google/start?redirect_to=${encodeURIComponent("/start")}`}
+              style={{ display: "inline-block", textDecoration: "none", textAlign: "center" }}
+            >
+              Sign in with Google
+            </a>
+          </div>
+        </div>
+        <SiteFooter />
       </>
     );
   }
@@ -749,6 +834,20 @@ function StartPageInner() {
       <SiteHeader />
       <div className="configurator">
       <div className="head">
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, fontSize: 13, marginBottom: 4 }}>
+          <span>Signed in as {identity.name || identity.email}</span>
+          <button
+            type="button"
+            onClick={() =>
+              fetch("/api/auth/logout", { method: "POST" }).then(() => {
+                setIdentity(null);
+              })
+            }
+            style={{ background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}
+          >
+            Not you? Sign out
+          </button>
+        </div>
         <div className="eyebrow">Start Your Order</div>
         <h1>Upload Your Photo &amp; Build Your Order</h1>
         <p>
@@ -1095,6 +1194,7 @@ function StartPageInner() {
         </div>
       </div>
       </div>
+      <SiteFooter />
     </>
   );
 }

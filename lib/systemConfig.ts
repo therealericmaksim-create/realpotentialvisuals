@@ -30,6 +30,9 @@ export const CONFIG_KEYS = [
   "PRICE_EXTRA",
   "PRICE_STRUCTURAL_BREAKDOWN",
   "PRICE_LOGO",
+  "GOOGLE_OAUTH_CLIENT_ID",
+  "GOOGLE_OAUTH_CLIENT_SECRET",
+  "CUSTOMER_SESSION_SECRET",
 ] as const;
 
 export type ConfigKey = (typeof CONFIG_KEYS)[number];
@@ -48,6 +51,9 @@ export const CONFIG_LABELS: Record<ConfigKey, string> = {
   PRICE_EXTRA: "Extra (Night / Seasonal / Holiday) Price",
   PRICE_STRUCTURAL_BREAKDOWN: "Structural vs. Cosmetic Breakdown Price",
   PRICE_LOGO: "Add Logo Price",
+  GOOGLE_OAUTH_CLIENT_ID: "Google OAuth Client ID",
+  GOOGLE_OAUTH_CLIENT_SECRET: "Google OAuth Client Secret",
+  CUSTOMER_SESSION_SECRET: "Customer Session Signing Secret",
 };
 
 export const CONFIG_SECRET: Record<ConfigKey, boolean> = {
@@ -64,6 +70,9 @@ export const CONFIG_SECRET: Record<ConfigKey, boolean> = {
   PRICE_EXTRA: false,
   PRICE_STRUCTURAL_BREAKDOWN: false,
   PRICE_LOGO: false,
+  GOOGLE_OAUTH_CLIENT_ID: false, // sent to the browser as part of the OAuth redirect URL anyway
+  GOOGLE_OAUTH_CLIENT_SECRET: true,
+  CUSTOMER_SESSION_SECRET: true,
 };
 
 // Rendered as a numeric ($) input in the System Variables page instead
@@ -82,6 +91,9 @@ export const CONFIG_NUMERIC: Record<ConfigKey, boolean> = {
   PRICE_EXTRA: true,
   PRICE_STRUCTURAL_BREAKDOWN: true,
   PRICE_LOGO: true,
+  GOOGLE_OAUTH_CLIENT_ID: false,
+  GOOGLE_OAUTH_CLIENT_SECRET: false,
+  CUSTOMER_SESSION_SECRET: false,
 };
 
 // Fallback defaults for keys with NO Worker env var backing at all —

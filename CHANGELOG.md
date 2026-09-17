@@ -3,6 +3,50 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.17.0 — 2026-09-17
+
+- `/start` now requires signing in with Google before anything can be
+  submitted — a direct OAuth 2.0 authorization-code flow (no framework;
+  reuses `jose`, already a dependency, in the same JWT-verification
+  shape already used for staff Cloudflare Access auth). This captures a
+  verified, real email address for every order from the very first step
+  — including abandoned sessions that never reach payment — rather than
+  only ever getting an email at Stripe checkout. New routes: `GET
+  /api/auth/google/start`, `GET /api/auth/google/callback`, `GET
+  /api/auth/me`, `POST /api/auth/logout`. New config keys (System
+  Variables): `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
+  `CUSTOMER_SESSION_SECRET`.
+- The verified session is the actual security boundary, not just a UI
+  gate: `POST /api/order` independently verifies the session cookie
+  server-side and rejects order creation with no valid session,
+  regardless of what the client claims.
+- `orders` gained a `customer_google_account_id` column
+  (`migrations/0005`, additive) capturing the customer's real Google
+  identity at order-creation time. `ensurePropertyLinkage()` uses it
+  directly when present, falling back to the existing `guest:<email>`
+  synthesis for admin Manual Orders (which have no real session behind
+  them) — so `clients.google_account_id` is now a REAL, stable identity
+  for every self-serve order instead of a string built from whatever
+  email Stripe happened to report.
+- Added `/privacypolicy` and `/tos` pages and a shared `SiteFooter`
+  linking to both from every public page (homepage, `/start`, and the
+  legal pages themselves) — required for the Google OAuth consent screen
+  and, more importantly, actually true statements about what the app
+  does with a customer's Google-sourced data (explicit scope-by-scope
+  disclosure, the required Limited Use compliance statement, and
+  instructions for revoking access from the customer's own Google
+  Account).
+- Verified end-to-end against production without needing real Google
+  credentials yet at the time: signed a test session JWT with the same
+  library/logic as the real code, confirmed `/api/auth/me` and `POST
+  /api/order`'s auth gate both behave correctly (401 with no session,
+  200 with a valid one, correct `customer_email`/
+  `customer_google_account_id` stored on the resulting order). Once real
+  Google OAuth credentials were available, wired them into System
+  Variables — the actual browser redirect handshake needs the live
+  domain to test (the registered redirect URI doesn't match localhost),
+  so that final leg is verified on production directly.
+
 ## v0.16.0 — 2026-09-17
 
 - Pricing is now admin-configurable with no deploy. All six values

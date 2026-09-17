@@ -1,5 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import SiteHeader from "@/components/SiteHeader";
+import SiteFooter from "@/components/SiteFooter";
 import { resolvePricing } from "@/lib/pricingConfig";
 
 // Pricing is admin-configurable (Settings -> System Variables) with no
@@ -478,35 +479,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* ======================================================================
-          FOOTER
-          ====================================================================== */}
-      <footer>
-        <div className="wrap">
-          <img src="/images/logo.png" alt="RealPotential Visuals" />
-          <div className="tagline">Human Curated. AI-Powered.</div>
-          <div className="loc">Proudly serving the continental United States</div>
-          <div className="flinks">
-            <a
-              href="https://www.facebook.com/RealPotentialVisuals"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Facebook
-            </a>
-            {/* Add links here once these pages exist:
-            <a href="/terms">Terms</a>
-            <a href="/license">License</a>
-            */}
-          </div>
-          <div className="legal">
-            &copy; 2026 RealPotential Visuals. All rights reserved.
-            <br />
-            Every visualization is AI-generated and human-curated. Not an
-            actual photograph.
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </>
   );
 }

@@ -15,9 +15,15 @@ export async function ensurePropertyLinkage(
   orderId: string
 ): Promise<{ clientId: string; propertyId: string; jobId: string } | null> {
   const order = await db
-    .prepare(`SELECT id, job_id, property_address, customer_email FROM orders WHERE id = ?`)
+    .prepare(`SELECT id, job_id, property_address, customer_email, customer_google_account_id FROM orders WHERE id = ?`)
     .bind(orderId)
-    .first<{ id: string; job_id: string | null; property_address: string | null; customer_email: string | null }>();
+    .first<{
+      id: string;
+      job_id: string | null;
+      property_address: string | null;
+      customer_email: string | null;
+      customer_google_account_id: string | null;
+    }>();
 
   if (!order) return null;
 
@@ -33,7 +39,10 @@ export async function ensurePropertyLinkage(
   if (!order.property_address || !order.customer_email) return null;
 
   const now = new Date().toISOString();
-  const googleAccountId = `guest:${order.customer_email.toLowerCase()}`;
+  // A REAL Google identity when the order came through the authenticated
+  // /start flow (2026-09-17) — falls back to the old guest:<email>
+  // synthesis for admin Manual Orders, which have no session behind them.
+  const googleAccountId = order.customer_google_account_id || `guest:${order.customer_email.toLowerCase()}`;
 
   let client = await db
     .prepare(`SELECT id FROM clients WHERE google_account_id = ?`)

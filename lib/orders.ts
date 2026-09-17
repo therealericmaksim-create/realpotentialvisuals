@@ -31,6 +31,12 @@ export type CreateOrderParams = {
   logoSelected: boolean;
   status: string;
   customerEmail?: string | null;
+  // The customer's REAL Google `sub`, only ever set by the authenticated
+  // /start flow (see app/api/order/route.ts) — null for admin Manual
+  // Orders, which have no real session behind them. ensurePropertyLinkage()
+  // uses this directly when present, falling back to synthesizing
+  // guest:<email> when it's not.
+  customerGoogleAccountId?: string | null;
   disclosureAcceptedAt?: string | null;
 };
 
@@ -62,8 +68,8 @@ export async function createOrderWithItems(
          id, status, curbappeal_photo_key, property_address, hoa_answer,
          historic_district_answer, gate_passed, gate_reason,
          disclosure_accepted_at, logo_key, total_amount_cents, customer_email,
-         created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         customer_google_account_id, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       orderId,
@@ -84,6 +90,7 @@ export async function createOrderWithItems(
       params.logoSelected ? "pending-upload" : null,
       totalCents,
       params.customerEmail ?? null,
+      params.customerGoogleAccountId ?? null,
       now,
       now
     )
