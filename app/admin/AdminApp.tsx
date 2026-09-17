@@ -508,7 +508,7 @@ type OrderListRow = {
 // — kept here so the filter never drifts from what the column actually allows.
 const ORDER_STATUSES = [
   "started", "verified", "queued", "placed", "analyzing", "in_curation",
-  "awaiting_selection", "in_progress", "in_qc", "complete", "cancelled",
+  "awaiting_selection", "in_production", "in_qc", "complete", "cancelled",
   "refunded", "error",
 ];
 
@@ -926,6 +926,7 @@ function OrderDetailSection({
             </button>
           )}
           {order.status === "in_qc" && <span className="pill">awaiting QC</span>}
+          {order.status === "in_production" && <span className="pill">in production</span>}
         </div>
       )}
 

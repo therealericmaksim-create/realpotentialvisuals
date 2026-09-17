@@ -3,6 +3,19 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.20.0 — 2026-09-17
+
+- **Renamed the post-QC order status `in_progress` to `in_production`.**
+  Requires `migrations/0006`, which rebuilds the `orders` table: SQLite
+  cannot alter a CHECK constraint in place. orders is referenced by
+  order_items, payments and contest_entries, so the migration uses
+  `PRAGMA defer_foreign_keys` to hold those checks until commit, by which
+  point the rebuilt table holds identical ids. No row actually carried
+  `in_progress` at migration time, so this was a constraint change only.
+  **The migration must be applied before this code is deployed** — QC
+  approval is the only path that writes the status, and the old CHECK
+  would reject the new value.
+
 ## v0.19.0 — 2026-09-17
 
 - **New customer order history at `/orders`** — Google sign-in gated, 25

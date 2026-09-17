@@ -18,7 +18,7 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   analyzing: "Being analyzed",
   in_curation: "With our curator",
   awaiting_selection: "Awaiting your selection",
-  in_progress: "Being rendered",
+  in_production: "Being rendered",
   in_qc: "In quality review",
   complete: "Delivered",
   cancelled: "Cancelled",

@@ -152,7 +152,7 @@ type ApproveBody = {
 
 // Approving is the QC sign-off: it records the exact prompt text the
 // reviewer settled on (they can edit what the builder produced before
-// approving) and moves every in_qc order on this job to 'in_progress',
+// approving) and moves every in_qc order on this job to 'in_production',
 // which is what takes it out of this queue and into production.
 export async function POST(req: NextRequest, { params }: Params) {
   const staff = await getCurrentStaff();
@@ -210,7 +210,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   for (const o of orderRows) {
-    await env.DB.prepare(`UPDATE orders SET status = 'in_progress', updated_at = ? WHERE id = ?`)
+    await env.DB.prepare(`UPDATE orders SET status = 'in_production', updated_at = ? WHERE id = ?`)
       .bind(now, o.id)
       .run();
     await env.DB.prepare(
