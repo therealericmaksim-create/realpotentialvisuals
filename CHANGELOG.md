@@ -3,6 +3,28 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.15.1 — 2026-09-17
+
+- Fixed "Awaiting Analysis" on the dashboard: it now simply counts orders
+  with `status = 'placed'` (what that status realistically means) instead
+  of a structure-profile-existence derivation that required job/property
+  linkage to already exist and didn't check order status at all — it kept
+  counting orders long after they'd moved past `placed`.
+- Fixed real staleness in the admin: navigating to a menu item (or
+  re-selecting the one already open) now always triggers a fresh data
+  load for that screen, instead of relying on incidental remounts. The
+  Dashboard specifically was stuck showing whatever numbers were current
+  when the admin was first opened, since its data lived in the parent
+  component and only fetched once ever.
+- Fixed a real UX trap in "Push to Curator": pushing an order with no
+  unassigned curated-tier renders silently flipped its status with zero
+  visible effect (it could never show up in the Curation Queue, which
+  only surfaces exactly that condition) — this is what made it look like
+  the queue was broken when an order really had been pushed. The button
+  is now hidden when there's nothing to curate on that order, and the
+  endpoint itself rejects the attempt with a clear reason as defense in
+  depth.
+
 ## v0.15.0 — 2026-09-17
 
 - Curation no longer requires analysis to have run. Fixed a real bug in

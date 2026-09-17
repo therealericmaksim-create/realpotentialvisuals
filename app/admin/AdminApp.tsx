@@ -117,6 +117,16 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
   const [identity, setIdentity] = useState<IdentityProfile["identity"]>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [orderSearch, setOrderSearch] = useState("");
+  // Bumped on every nav action (goTo/openOrder/openJob) and used as a React
+  // `key` on whichever section is currently mounted — forces a full
+  // unmount/remount (and therefore a fresh data load) every time a menu
+  // item is selected, even re-selecting the one already showing, instead
+  // of relying on section-value-changed as a proxy for "the admin should
+  // refetch," which silently didn't hold for the Dashboard (its data lives
+  // in this parent, fetched once on the app's own mount, so revisiting it
+  // kept showing whatever numbers were current the first time the whole
+  // admin was opened).
+  const [navToken, setNavToken] = useState(0);
 
   const loadDashboard = useCallback(() => {
     fetch("/api/admin/dashboard")
@@ -126,8 +136,9 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
   }, []);
 
   useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
+    if (section === "dashboard") loadDashboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section, navToken]);
 
   // Real Google login name/photo — fetched once here (not baked into
   // every /api/admin/* request, see lib/access.ts's header comment for
@@ -148,16 +159,19 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
     setSection(childKey);
     setSelectedOrderId(null);
     setSelectedJobId(null);
+    setNavToken((t) => t + 1);
   }
 
   function openOrder(id: string) {
     setSelectedOrderId(id);
     setSection("order-detail");
+    setNavToken((t) => t + 1);
   }
 
   function openJob(id: string) {
     setSelectedJobId(id);
     setSection("curation-workspace");
+    setNavToken((t) => t + 1);
   }
 
   function runSearch() {
@@ -291,9 +305,10 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
         </aside>
 
         <main>
-          {section === "dashboard" && <DashboardSection dashboard={dashboard} onNavigate={goTo} />}
+          {section === "dashboard" && <DashboardSection key={navToken} dashboard={dashboard} onNavigate={goTo} />}
           {section === "orders-list" && (
             <OrdersListSection
+              key={navToken}
               onOpenOrder={openOrder}
               initialQuery={orderSearch}
               onQueryConsumed={() => setOrderSearch("")}
@@ -301,21 +316,23 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
             />
           )}
           {section === "order-detail" && selectedOrderId && (
-            <OrderDetailSection orderId={selectedOrderId} onBack={() => goTo("orders-list")} onRan={loadDashboard} />
+            <OrderDetailSection key={navToken} orderId={selectedOrderId} onBack={() => goTo("orders-list")} onRan={loadDashboard} />
           )}
-          {section === "users-all" && <UsersSection isPrincipal={staff.isPrincipal} />}
-          {section === "settings-variables" && <SystemVariablesSection isPrincipal={staff.isPrincipal} />}
+          {section === "users-all" && <UsersSection key={navToken} isPrincipal={staff.isPrincipal} />}
+          {section === "settings-variables" && <SystemVariablesSection key={navToken} isPrincipal={staff.isPrincipal} />}
           {section === "orders-manual" && (
             <ManualOrderSection
+              key={navToken}
               onCreated={(orderId) => {
                 openOrder(orderId);
                 loadDashboard();
               }}
             />
           )}
-          {section === "curation-queue" && <CurationQueueSection onOpenJob={openJob} />}
+          {section === "curation-queue" && <CurationQueueSection key={navToken} onOpenJob={openJob} />}
           {section === "curation-workspace" && selectedJobId && (
             <JobCurationWorkspaceSection
+              key={navToken}
               jobId={selectedJobId}
               onBack={() => goTo("curation-queue")}
               onSaved={loadDashboard}
@@ -732,6 +749,7 @@ function OrderDetailSection({
 
   const { order, renderItems, analysis, consensus, topMatches, curationRanks, regulatory, neighborhood } = data;
   const total = (order.total_amount_cents / 100).toFixed(2);
+  const hasUnassignedCurated = renderItems.some((item) => item.tier === "curated" && !item.style_name);
 
   return (
     <>
@@ -807,14 +825,17 @@ function OrderDetailSection({
       )}
 
       {order.job_id && (
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <button className="btn-primary" onClick={runAnalysis} disabled={running}>
             {running ? "Running…" : analysis ? "Re-run Analysis" : "Run Analysis"}
           </button>
-          {(order.status === "placed" || order.status === "analyzing") && (
+          {(order.status === "placed" || order.status === "analyzing") && hasUnassignedCurated && (
             <button className="cfg-remove" onClick={pushToCurator} disabled={pushing}>
               {pushing ? "Pushing…" : "Push to Curator"}
             </button>
+          )}
+          {(order.status === "placed" || order.status === "analyzing") && !hasUnassignedCurated && (
+            <span className="note">No curated-tier renders on this order — nothing to push to curation.</span>
           )}
           {order.status === "in_curation" && <span className="pill">pushed to curator</span>}
         </div>

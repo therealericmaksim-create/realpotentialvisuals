@@ -20,12 +20,15 @@ export async function GET() {
   const [awaitingAnalysis, awaitingCuration, awaitingQc, openRequests, openEscalations, todayIntake] =
     await Promise.all([
       db
-        .prepare(
-          `SELECT COUNT(*) as n FROM orders o
-           JOIN jobs j ON j.id = o.job_id
-           LEFT JOIN curbappeal_property_structure_analysis psa ON psa.property_id = j.property_id
-           WHERE psa.id IS NULL`
-        )
+        // 'placed' IS "awaiting analysis" — an order sits at this status
+        // from the moment it's paid until staff either run analysis on it
+        // (-> 'analyzing') or push it straight to curation. Same
+        // status-based pattern as "Awaiting Curation" below, not derived
+        // from structure-profile existence (that missed any order without
+        // job/property linkage yet, and didn't actually check status at
+        // all, so it kept counting orders long after they'd moved past
+        // 'placed').
+        .prepare(`SELECT COUNT(*) as n FROM orders WHERE status = 'placed'`)
         .first<{ n: number }>(),
       db
         .prepare(
