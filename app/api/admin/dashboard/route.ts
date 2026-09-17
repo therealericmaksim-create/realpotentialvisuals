@@ -29,10 +29,18 @@ export async function GET() {
         .first<{ n: number }>(),
       db
         .prepare(
-          `SELECT COUNT(*) as n FROM jobs j
-           JOIN curbappeal_property_structure_analysis psa ON psa.property_id = j.property_id
-           LEFT JOIN curations c ON c.job_id = j.id
-           WHERE c.id IS NULL`
+          // A job needs curation when it has at least one 'curated'-tier
+          // render still unassigned (style_id IS NULL) — self_directed and
+          // premium never enter this queue at all. Deliberately NOT keyed
+          // off the old `curations` table (that table modeled the
+          // pre-v0.10.0 fixed-package "12 candidates, 3 included" bundle
+          // and was never updated for per-render pricing; it's dead/unused
+          // now, left in place rather than dropped).
+          `SELECT COUNT(DISTINCT j.id) as n
+           FROM jobs j
+           JOIN orders o ON o.job_id = j.id
+           JOIN order_items oi ON oi.order_id = o.id
+           WHERE oi.tier = 'curated' AND oi.style_id IS NULL`
         )
         .first<{ n: number }>(),
       db

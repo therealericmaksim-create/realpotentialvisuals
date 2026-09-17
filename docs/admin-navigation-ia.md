@@ -60,7 +60,9 @@ The screen the business is actually about. Without it, "human curated" is
 just homepage copy.
 
 - **Curation Queue** — jobs with `jobs.status` ready for curation, sorted by
-  wait time
+  wait time. This is the only nav entry for this section — the workspace
+  below is a detail view reached by clicking a job in this queue, same
+  pattern as Orders → Order Detail, never a standalone nav destination.
 - **Job Curation Workspace** (`/admin/job/{id}`) — the main screen:
   - Original photo + retained Street View frame (`curbappeal_property_neighborhood_reads`)
   - Structure analysis read (`curbappeal_property_structure_analysis`)

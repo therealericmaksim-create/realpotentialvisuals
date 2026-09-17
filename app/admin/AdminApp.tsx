@@ -54,8 +54,10 @@ const NAV: NavGroup[] = [
     { key: "orders-manual", label: "Manual Order", status: "built" },
   ]},
   { key: "curation", label: "Curation", color: "var(--ops)", priority: 1, badge: "awaitingCuration", children: [
-    { key: "curation-queue", label: "Curation Queue", status: "planned" },
-    { key: "curation-workspace", label: "Job Curation Workspace", status: "planned" },
+    // No separate nav entry for the Job Curation Workspace — same pattern
+    // as Orders: it's a detail view reached only by clicking a job in
+    // this queue, never a standalone destination.
+    { key: "curation-queue", label: "Curation Queue", status: "built" },
   ]},
   { key: "production", label: "Production", color: "var(--ops)", priority: 2, children: [
     { key: "production-worksheet", label: "Daily Worksheet", status: "planned" },
@@ -110,6 +112,7 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
   const [openGroup, setOpenGroup] = useState<string | null>("orders");
   const [section, setSection] = useState<string>("dashboard");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [identity, setIdentity] = useState<IdentityProfile["identity"]>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -144,11 +147,17 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
   function goTo(childKey: string) {
     setSection(childKey);
     setSelectedOrderId(null);
+    setSelectedJobId(null);
   }
 
   function openOrder(id: string) {
     setSelectedOrderId(id);
     setSection("order-detail");
+  }
+
+  function openJob(id: string) {
+    setSelectedJobId(id);
+    setSection("curation-workspace");
   }
 
   function runSearch() {
@@ -304,6 +313,14 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
               }}
             />
           )}
+          {section === "curation-queue" && <CurationQueueSection onOpenJob={openJob} />}
+          {section === "curation-workspace" && selectedJobId && (
+            <JobCurationWorkspaceSection
+              jobId={selectedJobId}
+              onBack={() => goTo("curation-queue")}
+              onSaved={loadDashboard}
+            />
+          )}
           {![
             "dashboard",
             "orders-list",
@@ -311,6 +328,8 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
             "users-all",
             "settings-variables",
             "orders-manual",
+            "curation-queue",
+            "curation-workspace",
           ].includes(section) && <PlaceholderSection sectionKey={section} />}
         </main>
       </div>
@@ -418,6 +437,14 @@ type OrderListRow = {
   curbappeal_photo_key: string | null;
 };
 
+// Mirrors the orders.status CHECK constraint exactly (realpotential-schema.sql)
+// — kept here so the filter never drifts from what the column actually allows.
+const ORDER_STATUSES = [
+  "started", "verified", "queued", "placed", "analyzing", "in_curation",
+  "awaiting_selection", "in_progress", "in_qc", "complete", "cancelled",
+  "refunded", "error",
+];
+
 function OrdersListSection({
   onOpenOrder,
   initialQuery,
@@ -432,6 +459,7 @@ function OrdersListSection({
   const [orders, setOrders] = useState<OrderListRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState(initialQuery);
+  const [statusFilter, setStatusFilter] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -486,16 +514,18 @@ function OrdersListSection({
   }, [initialQuery]);
 
   const q = query.trim().toLowerCase();
-  const filtered =
-    orders && q
-      ? orders.filter(
-          (o) =>
-            o.id.toLowerCase().includes(q) ||
-            (o.property_address ?? "").toLowerCase().includes(q) ||
-            (o.customer_email ?? "").toLowerCase().includes(q) ||
-            o.status.toLowerCase().includes(q)
-        )
-      : orders;
+  const filtered = orders
+    ? orders.filter((o) => {
+        if (statusFilter && o.status !== statusFilter) return false;
+        if (!q) return true;
+        return (
+          o.id.toLowerCase().includes(q) ||
+          (o.property_address ?? "").toLowerCase().includes(q) ||
+          (o.customer_email ?? "").toLowerCase().includes(q) ||
+          o.status.toLowerCase().includes(q)
+        );
+      })
+    : orders;
 
   return (
     <>
@@ -505,17 +535,28 @@ function OrdersListSection({
         <p>Every order placed, most recent first.</p>
       </div>
       <div className="section-block">
-        <input
-          type="text"
-          placeholder="Filter by address, email, status, or order id…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          style={{ marginBottom: 16, maxWidth: 420 }}
-        />
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
+          <input
+            type="text"
+            placeholder="Filter by address, email, status, or order id…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={{ maxWidth: 420, flex: 1 }}
+          />
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--text-dim)" }}>
+            Show only:
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All statuses</option>
+              {ORDER_STATUSES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
+        </div>
         {error && <p className="error-text">{error}</p>}
         {!orders && !error && <p className="loading">Loading…</p>}
         {filtered && filtered.length === 0 && (
-          <p className="loading">{q ? "No orders match that search." : "No orders yet."}</p>
+          <p className="loading">{q || statusFilter ? "No orders match that filter." : "No orders yet."}</p>
         )}
         {filtered && filtered.length > 0 && (
           <table className="data">
@@ -1563,6 +1604,335 @@ function ManualOrderSection({ onCreated }: { onCreated: (orderId: string) => voi
           </button>
         </div>
       </form>
+    </>
+  );
+}
+
+type CurationQueueRow = {
+  job_id: string;
+  property_address: string;
+  unassigned_count: number;
+  oldest_order_at: string;
+};
+
+function CurationQueueSection({ onOpenJob }: { onOpenJob: (jobId: string) => void }) {
+  const [jobs, setJobs] = useState<CurationQueueRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    fetch("/api/admin/curation")
+      .then(async (r) => {
+        const text = await r.text();
+        let parsed: { jobs?: CurationQueueRow[]; error?: string } | null = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+        return parsed as { jobs: CurationQueueRow[] };
+      })
+      .then((d) => setJobs(d.jobs ?? []))
+      .catch((e: Error) => setError(`Failed to load curation queue: ${e.message}`));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return (
+    <>
+      <div className="page-head">
+        <div className="eyebrow">Curation</div>
+        <h1>Curation Queue</h1>
+        <p>Jobs with at least one curated-tier render still waiting on a style. Oldest first.</p>
+      </div>
+
+      {error && <p className="error-text">{error}</p>}
+      {!jobs && !error && <p className="loading">Loading…</p>}
+      {jobs && jobs.length === 0 && <p className="loading">Nothing waiting on curation right now.</p>}
+
+      {jobs && jobs.length > 0 && (
+        <div className="section-block">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Address</th>
+                <th>Unassigned renders</th>
+                <th>Waiting since</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.map((j) => (
+                <tr key={j.job_id} className="clickable" onClick={() => onOpenJob(j.job_id)}>
+                  <td>{j.property_address}</td>
+                  <td>{j.unassigned_count}</td>
+                  <td>{new Date(j.oldest_order_at).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+type CurationSlot = {
+  id: string;
+  order_id: string;
+  style_id: string | null;
+  style_name: string;
+  night: number;
+  seasonal: number;
+  season_choice: string | null;
+  holiday: number;
+  holiday_choice: string | null;
+  breakdown: number;
+};
+
+type CurationWorkspaceData = {
+  job: { id: string; propertyAddress: string; curbappealPhotoKey: string | null };
+  slots: CurationSlot[];
+  analysis: { house_type: string; roof_form: string; massing_envelope: string } | null;
+  topMatches: { name: string; combined_score_pct: number; fit_tier: string }[];
+  curationRanks: { rank: number; style_name: string; reasoning: string }[];
+  regulatory: { zoning_district: string | null; historic_overlay: number | null; flood_zone: string | null; summary: string } | null;
+  neighborhood: { style_read: string; homes_visible: number; street_view_key: string | null } | null;
+};
+
+function slotLabel(slot: CurationSlot): string {
+  const extras: string[] = [];
+  if (slot.night) extras.push("Night View");
+  if (slot.seasonal) extras.push(`Seasonal (${slot.season_choice ?? "—"})`);
+  if (slot.holiday) extras.push(`Holiday (${slot.holiday_choice ?? "—"})`);
+  if (slot.breakdown) extras.push("Structural Breakdown");
+  return extras.length > 0 ? extras.join(", ") : "no extras";
+}
+
+function JobCurationWorkspaceSection({
+  jobId,
+  onBack,
+  onSaved,
+}: {
+  jobId: string;
+  onBack: () => void;
+  onSaved: () => void;
+}) {
+  const [data, setData] = useState<CurationWorkspaceData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [assignments, setAssignments] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [showFullRegulatory, setShowFullRegulatory] = useState(false);
+
+  const load = useCallback(() => {
+    fetch(`/api/admin/curation/${jobId}`)
+      .then(async (r) => {
+        const text = await r.text();
+        let parsed: (CurationWorkspaceData & { error?: string }) | null = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+        return parsed as CurationWorkspaceData;
+      })
+      .then((d) => setData(d))
+      .catch((e: Error) => setError(`Failed to load curation workspace: ${e.message}`));
+  }, [jobId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (error) return <p className="error-text">{error}</p>;
+  if (!data) return <p className="loading">Loading…</p>;
+
+  const { job, slots, analysis, topMatches, curationRanks, regulatory, neighborhood } = data;
+  const unassigned = slots.filter((s) => !s.style_id);
+  const assignedAlready = slots.filter((s) => s.style_id);
+
+  // Candidate options: AI-ranked first (already narrowed + reasoned),
+  // then any other algorithm top match not already covered, then an
+  // escape hatch into the full 133-style catalog for anything outside
+  // the shortlist.
+  const rankedNames = new Set(curationRanks.map((r) => r.style_name));
+  const otherMatches = topMatches.filter((m) => !rankedNames.has(m.name));
+
+  function setAssignment(slotId: string, styleName: string) {
+    setAssignments((cur) => ({ ...cur, [slotId]: styleName }));
+  }
+
+  async function save() {
+    const toSubmit = unassigned
+      .map((s) => ({ orderItemId: s.id, styleName: assignments[s.id] }))
+      .filter((a) => a.styleName);
+    if (toSubmit.length === 0) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/admin/curation/${jobId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignments: toSubmit }),
+      });
+      const text = await r.text();
+      let parsed: { error?: string } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+      setAssignments({});
+      load();
+      onSaved();
+    } catch (e) {
+      setError(`Failed to save assignments: ${(e as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <button className="back-link" onClick={onBack}>← Back to Curation Queue</button>
+      <div className="page-head">
+        <div className="eyebrow">Curation</div>
+        <h1>{job.propertyAddress}</h1>
+        <p>{unassigned.length} render{unassigned.length === 1 ? "" : "s"} waiting on a style.</p>
+      </div>
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        {job.curbappealPhotoKey && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="detail-photo" src={`/api/admin/media/${job.curbappealPhotoKey}`} alt="Uploaded property photo" />
+        )}
+        {neighborhood?.street_view_key && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            className="detail-photo"
+            src={`/api/admin/media/${neighborhood.street_view_key}`}
+            alt="Street View of the surrounding block"
+          />
+        )}
+      </div>
+
+      {!analysis && (
+        <p className="error-text">No structure analysis yet — run analysis on this order before curating.</p>
+      )}
+
+      {analysis && (
+        <div className="section-block">
+          <h3>Structure</h3>
+          <p className="note">{analysis.house_type} — {analysis.roof_form} roof — {analysis.massing_envelope}</p>
+
+          {regulatory && (
+            <>
+              <h3 style={{ marginTop: 16 }}>Regulatory</h3>
+              <p className="note">
+                Zoning: {regulatory.zoning_district ?? "unknown"} — Historic overlay:{" "}
+                {regulatory.historic_overlay === null ? "unknown" : regulatory.historic_overlay ? "yes" : "no"} — Flood zone: {regulatory.flood_zone ?? "unknown"}
+              </p>
+              <button type="button" className="stat-link" onClick={() => setShowFullRegulatory((v) => !v)}>
+                {showFullRegulatory ? "Hide" : "Show"} full research &amp; sources
+              </button>
+              {showFullRegulatory && (
+                <p className="note" style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>{regulatory.summary}</p>
+              )}
+            </>
+          )}
+
+          {neighborhood && (
+            <>
+              <h3 style={{ marginTop: 16 }}>Neighborhood read</h3>
+              <p className="note">{neighborhood.style_read}</p>
+            </>
+          )}
+
+          {topMatches.length > 0 && (
+            <>
+              <h3 style={{ marginTop: 16 }}>Top matches</h3>
+              {curationRanks.length > 0 ? (
+                <>
+                  <p className="note">AI-ranked starting point for curation.</p>
+                  {curationRanks.map((r) => {
+                    const m = topMatches.find((t) => t.name === r.style_name);
+                    return (
+                      <div key={r.rank} className="empty-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 2 }}>
+                        <strong>
+                          {r.rank}. {r.style_name}
+                          {m && ` — ${m.combined_score_pct}% (${m.fit_tier})`}
+                        </strong>
+                        <span className="note">{r.reasoning}</span>
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                topMatches.map((m, i) => (
+                  <div key={i} className="empty-row">{m.name} — {m.combined_score_pct}% ({m.fit_tier})</div>
+                ))
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {assignedAlready.length > 0 && (
+        <div className="section-block">
+          <h3>Already assigned</h3>
+          {assignedAlready.map((s) => (
+            <div key={s.id} className="empty-row">
+              {s.style_name} <span className="note">— {slotLabel(s)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {analysis && unassigned.length > 0 && (
+        <div className="section-block">
+          <h3>Assign styles</h3>
+          {unassigned.map((s, i) => (
+            <div key={s.id} className="empty-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
+              <strong>Curated render #{i + 1} <span className="note">— {slotLabel(s)}</span></strong>
+              <select value={assignments[s.id] ?? ""} onChange={(e) => setAssignment(s.id, e.target.value)}>
+                <option value="">Select a style…</option>
+                {curationRanks.length > 0 && (
+                  <optgroup label="AI-ranked candidates">
+                    {curationRanks.map((r) => (
+                      <option key={r.style_name} value={r.style_name}>
+                        {r.rank}. {r.style_name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {otherMatches.length > 0 && (
+                  <optgroup label="Other top matches">
+                    {otherMatches.map((m) => (
+                      <option key={m.name} value={m.name}>
+                        {m.name} — {m.combined_score_pct}%
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {STYLE_FAMILIES.map((fam) => (
+                  <optgroup key={fam.family} label={fam.family}>
+                    {fam.styles.map((styleName) => (
+                      <option key={styleName} value={styleName}>{styleName}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+          ))}
+          <button className="btn-primary" type="button" onClick={save} disabled={saving} style={{ marginTop: 10 }}>
+            {saving ? "Saving…" : "Save Assignments"}
+          </button>
+        </div>
+      )}
     </>
   );
 }

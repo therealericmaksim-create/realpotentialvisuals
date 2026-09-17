@@ -3,6 +3,31 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.14.0 — 2026-09-17
+
+- Admin: built out the Curation Queue and Job Curation Workspace — the
+  screen that turns Phase 2's analysis into an actual style assignment
+  for every curated-tier render. Curation Queue lists jobs with at least
+  one unassigned curated slot (oldest first); clicking one opens the
+  workspace, which surfaces the photo, retained Street View, structure
+  read, regulatory findings, neighborhood context, the AI curation
+  ranking + reasoning (v0.13.0), and one style picker per unassigned
+  slot. Saving writes directly to `order_items.style_id`/`style_name`
+  and logs the change to the `events` audit table — no new schema needed,
+  since the old `curations` table (designed for the pre-v0.10.0 fixed
+  "Starter Package" bundle model) is dead and was left untouched rather
+  than migrated. New endpoints: `GET /api/admin/curation` (queue),
+  `GET`/`POST /api/admin/curation/[jobId]` (workspace + assignment
+  submit). Also fixed the dashboard's "Awaiting Curation" count, which
+  was silently keyed off that same dead `curations` table and had been
+  overcounting since the pricing rewrite (it now correctly counts jobs
+  with an unassigned curated-tier render, matching the queue's own
+  definition). No separate nav entry for the workspace — reached only by
+  clicking a job in the queue, same pattern as Orders → Order Detail.
+- Admin: All Orders gained a "Show only:" status filter next to the
+  existing search box, listing every value the `orders.status` column's
+  own CHECK constraint allows.
+
 ## v0.13.0 — 2026-09-17
 
 - Admin: All Orders now shows a 44px thumbnail of the uploaded property
