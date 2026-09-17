@@ -3,6 +3,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
 import { getConfigValue } from "@/lib/systemConfig";
 import { generateRenderImage, DEFAULT_IMAGE_MODEL } from "@/lib/renderGeneration";
+import { buildRenderPrompts, PROMPT_GENERATION_MODE, PROMPT_TEMPLATE_VERSION } from "@/lib/renderPrompt";
+import { loadJobWorkspace, promptSlotsFrom } from "@/lib/jobWorkspace";
 
 // Generates one render: sends the approved instruction and the customer's
 // own photo to the image model, stores the result in R2, and records a
@@ -103,15 +105,58 @@ export async function POST(req: NextRequest, { params }: Params) {
     .first<{ n: number }>();
   const iteration = (priorCount?.n ?? 0) + 1;
 
-  const promptGeneration = await env.DB.prepare(
-    `SELECT id FROM prompt_generations WHERE job_id = ? AND style_id = ?
-     ORDER BY generated_at DESC LIMIT 1`
-  )
-    .bind(jobId, slot.style_id)
-    .first<{ id: string }>();
-
   const renderId = crypto.randomUUID();
   const now = new Date().toISOString();
+
+  // Record the prompt that was ACTUALLY sent, as its own row, and point
+  // the render at it. Previously the render was linked to the newest
+  // QC-approved prompt, which is not necessarily the text that was
+  // rendered — the operator can edit the box, or switch it to the
+  // current template — so the audit trail could not answer "what produced
+  // this image", which is the one question it exists to answer.
+  //
+  // The template label is derived by comparing the submitted text against
+  // the current build and the approved row, rather than trusted from the
+  // client.
+  const ws = await loadJobWorkspace(env.DB, jobId);
+  const currentBuild = ws
+    ? (await buildRenderPrompts(env.DB, jobId, ws.job.propertyId, promptSlotsFrom(ws.slots))).find(
+        (b) => b.orderItemId === body.orderItemId
+      )
+    : undefined;
+  const approvedRow = await env.DB.prepare(
+    `SELECT assembled_prompt, template_version FROM prompt_generations
+     WHERE job_id = ? AND style_id = ? ORDER BY generated_at DESC LIMIT 1`
+  )
+    .bind(jobId, slot.style_id)
+    .first<{ assembled_prompt: string; template_version: string }>();
+
+  const sent = body.prompt.trim();
+  const templateUsed =
+    currentBuild && sent === currentBuild.assembledPrompt.trim()
+      ? PROMPT_TEMPLATE_VERSION
+      : approvedRow && sent === approvedRow.assembled_prompt.trim()
+        ? approvedRow.template_version
+        : "operator-edited";
+
+  const promptGenerationId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO prompt_generations
+       (id, job_id, style_id, generation_mode, assembled_prompt, negative_prompt, template_version, generated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(
+      promptGenerationId,
+      jobId,
+      slot.style_id,
+      PROMPT_GENERATION_MODE,
+      body.prompt,
+      currentBuild?.negativePrompt ?? null,
+      templateUsed,
+      now
+    )
+    .run();
+  const promptGeneration = { id: promptGenerationId };
 
   await env.DB.prepare(
     `INSERT INTO renders
@@ -139,6 +184,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         requestedSize: generated.requestedSize,
         sourceWidth: generated.sourceWidth,
         sourceHeight: generated.sourceHeight,
+        templateUsed,
+        promptGenerationId,
       }),
       now
     )

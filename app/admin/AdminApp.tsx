@@ -907,8 +907,10 @@ function OrderDetailSection({
       </div>
 
       {order.curbappeal_photo_key && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img className="detail-photo" src={`/api/admin/media/${order.curbappeal_photo_key}`} alt="Uploaded property photo" />
+        <a href={`/api/admin/media/${order.curbappeal_photo_key}`} target="_blank" rel="noreferrer">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="detail-photo" src={`/api/admin/media/${order.curbappeal_photo_key}`} alt="Uploaded property photo" />
+        </a>
       )}
 
       <div className="section-block">
@@ -2187,8 +2189,10 @@ function JobCurationWorkspaceSection({
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         {job.curbappealPhotoKey && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="detail-photo" src={`/api/admin/media/${job.curbappealPhotoKey}`} alt="Uploaded property photo" />
+          <a href={`/api/admin/media/${job.curbappealPhotoKey}`} target="_blank" rel="noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="detail-photo" src={`/api/admin/media/${job.curbappealPhotoKey}`} alt="Uploaded property photo" />
+          </a>
         )}
         {neighborhood?.street_view_key && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -2511,8 +2515,10 @@ function QcWorkspaceSection({
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         {job.curbappealPhotoKey && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="detail-photo" src={`/api/admin/media/${job.curbappealPhotoKey}`} alt="Uploaded property photo" />
+          <a href={`/api/admin/media/${job.curbappealPhotoKey}`} target="_blank" rel="noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="detail-photo" src={`/api/admin/media/${job.curbappealPhotoKey}`} alt="Uploaded property photo" />
+          </a>
         )}
         {neighborhood?.street_view_key && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -2756,6 +2762,11 @@ function ProductionWorkspaceSection({
   const [renderingId, setRenderingId] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [accepted, setAccepted] = useState<string | null>(null);
+  // Which prompt text each box currently holds, so switching templates
+  // gives visible confirmation. Clicking with no feedback made it look
+  // like nothing happened even when the text had changed hundreds of
+  // lines down.
+  const [switched, setSwitched] = useState<Record<string, string>>({});
 
   const load = useCallback(() => {
     fetch(`/api/admin/production/${jobId}`)
@@ -2860,8 +2871,10 @@ function ProductionWorkspaceSection({
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         {job.curbappealPhotoKey && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="detail-photo" src={`/api/admin/media/${job.curbappealPhotoKey}`} alt="Uploaded property photo" />
+          <a href={`/api/admin/media/${job.curbappealPhotoKey}`} target="_blank" rel="noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="detail-photo" src={`/api/admin/media/${job.curbappealPhotoKey}`} alt="Uploaded property photo" />
+          </a>
         )}
         {neighborhood?.street_view_key && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -2912,7 +2925,10 @@ function ProductionWorkspaceSection({
                     type="button"
                     className="btn-primary"
                     style={{ marginLeft: 10 }}
-                    onClick={() => setEdited((cur) => ({ ...cur, [p.orderItemId]: p.rebuiltPrompt }))}
+                    onClick={() => {
+                      setEdited((cur) => ({ ...cur, [p.orderItemId]: p.rebuiltPrompt }));
+                      setSwitched((cur) => ({ ...cur, [p.orderItemId]: p.currentTemplateVersion }));
+                    }}
                   >
                     Use template {p.currentTemplateVersion}
                   </button>
@@ -2925,6 +2941,15 @@ function ProductionWorkspaceSection({
                 onChange={(e) => setEdited((cur) => ({ ...cur, [p.orderItemId]: e.target.value }))}
                 rows={12}
               />
+
+              <div className="note" style={{ marginTop: 4 }}>
+                This box currently holds:{" "}
+                <strong>
+                  {switched[p.orderItemId] ??
+                    (edited[p.orderItemId] !== undefined ? "your edits" : p.templateVersion)}
+                </strong>
+                . Whatever is in it is exactly what gets sent and recorded.
+              </div>
 
               <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 6 }}>
                 <button
@@ -2948,11 +2973,17 @@ function ProductionWorkspaceSection({
                 <div className="render-grid">
                   {mine.map((r) => (
                     <figure key={r.id} className="render-out">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`/api/admin/media/${r.delivered_key ?? r.storage_key}`}
-                        alt={`${r.style_name} render, iteration ${r.iteration_number}`}
-                      />
+                      <a
+                        href={`/api/admin/media/${r.delivered_key ?? r.storage_key}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/api/admin/media/${r.delivered_key ?? r.storage_key}`}
+                          alt={`${r.style_name} render, iteration ${r.iteration_number}`}
+                        />
+                      </a>
                       <figcaption>
                         v{r.iteration_number} — {r.qc_status}
                         {r.selected ? " — delivered" : ""}

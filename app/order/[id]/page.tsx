@@ -160,11 +160,17 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               <h2 className="order-section-head">Your Photo</h2>
               {data.order.curbappeal_photo_key ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  className="order-detail-photo"
-                  src={`/api/customer/media/${data.order.curbappeal_photo_key}`}
-                  alt="The property photo you uploaded"
-                />
+                <a
+                  href={`/api/customer/media/${data.order.curbappeal_photo_key}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <img
+                    className="order-detail-photo"
+                    src={`/api/customer/media/${data.order.curbappeal_photo_key}`}
+                    alt="The property photo you uploaded — opens full size"
+                  />
+                </a>
               ) : (
                 <p style={{ color: "var(--gray)" }}>No photo on file for this order.</p>
               )}
@@ -191,10 +197,17 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     <div key={i.id} className="order-render-card">
                       {image ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={`/api/customer/media/${image.delivered_key ?? image.storage_key}`}
-                          alt={`${title} visualization of your property`}
-                        />
+                        <a
+                          href={`/api/customer/media/${image.delivered_key ?? image.storage_key}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Open the full-size image"
+                        >
+                          <img
+                            src={`/api/customer/media/${image.delivered_key ?? image.storage_key}`}
+                            alt={`${title} visualization of your property — opens full size`}
+                          />
+                        </a>
                       ) : (
                         <div className="order-render-pending">
                           <span>{customerStageLabel(i.stage)}</span>

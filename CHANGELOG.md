@@ -3,6 +3,29 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.23.0 — 2026-09-17
+
+- **Every render now records the prompt that was actually sent.** The
+  render was previously linked to the newest QC-approved prompt, which is
+  not necessarily the text that was rendered — the operator can edit the
+  box or switch templates — so the audit trail could not answer the one
+  question it exists for: what produced this image. Rendering now writes
+  its own prompt_generations row containing the literal text used, and the
+  render points at that row. The template label is derived server-side by
+  comparing the submitted text against the current build and the approved
+  row (current version / the approved version / "operator-edited") rather
+  than trusted from the client.
+- **The template-switch button now confirms itself.** Clicking "Use
+  template vN" swapped the textarea contents but gave no visible signal,
+  and since the differences sit far down a long prompt it looked like
+  nothing had happened. Each prompt box now states what it currently
+  holds — a template version, or "your edits" — and says plainly that
+  whatever is in the box is what gets sent and recorded.
+- **Images open full size in a new tab** when clicked: the uploaded photo
+  and generated renders in the admin (order detail and all three
+  workspaces), and the photo and delivered renders on the customer order
+  page.
+
 ## v0.22.2 — 2026-09-17
 
 - **Fixed: the orders list looked like it had lost data.** Making the list
