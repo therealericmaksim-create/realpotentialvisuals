@@ -3,6 +3,27 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.23.1 — 2026-09-17
+
+- **Fixed: the Render with AI button stopped working.** v0.23.0 recorded
+  the prompt actually sent, but did that work BEFORE inserting the renders
+  row and without a guard. When it threw, the image had already been
+  generated, paid for and written to R2 — yet no renders row existed, so
+  the image was orphaned and the operator just saw the button fail. The
+  order is now: generate, store, insert the renders row, and only then
+  record provenance inside a try/catch that cannot fail the request. A
+  missing provenance row is a far smaller loss than a lost render. The
+  rebuild also now covers only the render being made rather than every
+  render on the job.
+- **The Curation, QC and Production queues are per-render**, matching the
+  All Orders list. A job-level row with a count hid which renders were
+  actually waiting and could not show a render reference, address or
+  photo — staff had to open the job to find out what was in it. Each row
+  now shows its reference (#CC95B419-2), tier, style or custom request,
+  address, thumbnail, any QC denial, and how long it has waited.
+- The three queues are one shared component instead of three near-copies,
+  so a fix lands in all of them rather than two.
+
 ## v0.23.0 — 2026-09-17
 
 - **Every render now records the prompt that was actually sent.** The

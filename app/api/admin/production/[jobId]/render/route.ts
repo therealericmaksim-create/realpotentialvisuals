@@ -3,12 +3,24 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
 import { getConfigValue } from "@/lib/systemConfig";
 import { generateRenderImage, DEFAULT_IMAGE_MODEL } from "@/lib/renderGeneration";
-import { buildRenderPrompts, PROMPT_GENERATION_MODE, PROMPT_TEMPLATE_VERSION } from "@/lib/renderPrompt";
-import { loadJobWorkspace, promptSlotsFrom } from "@/lib/jobWorkspace";
+import {
+  buildRenderPrompts,
+  PROMPT_GENERATION_MODE,
+  PROMPT_TEMPLATE_VERSION,
+} from "@/lib/renderPrompt";
 
 // Generates one render: sends the approved instruction and the customer's
 // own photo to the image model, stores the result in R2, and records a
 // `renders` row so the image has an identity beyond a file in a bucket.
+//
+// ORDERING MATTERS HERE. The image costs real money and takes up to a
+// minute, so the moment it exists it is written to R2 and given a renders
+// row. Everything after that — recording which prompt produced it — is
+// bookkeeping, and runs inside a try/catch that cannot fail the request.
+// An earlier version did that bookkeeping BEFORE the insert and unguarded:
+// when it threw, the generated image was already stored and paid for but
+// no renders row was written, so the image was orphaned and the operator
+// just saw the render button fail.
 //
 // New renders land at qc_status='pending' and selected=0 deliberately.
 // Nothing here decides an image is good enough to deliver — the customer
@@ -36,14 +48,34 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   // Scoped to this job so a tampered orderItemId can't render against
-  // another customer's job or photo.
+  // another customer's job or photo. Pulls the whole slot so the prompt
+  // can later be rebuilt for just this one render, rather than loading
+  // every render on the job to check one of them.
   const slot = await env.DB.prepare(
-    `SELECT oi.id, oi.style_id, o.curbappeal_photo_key, o.status
-     FROM order_items oi JOIN orders o ON o.id = oi.order_id
+    `SELECT oi.id, oi.tier, oi.style_id, oi.style_name, oi.custom_text,
+            oi.night, oi.seasonal, oi.season_choice, oi.holiday, oi.holiday_choice,
+            oi.breakdown, o.curbappeal_photo_key, j.property_id
+     FROM order_items oi
+     JOIN orders o ON o.id = oi.order_id
+     JOIN jobs j ON j.id = o.job_id
      WHERE oi.id = ? AND o.job_id = ? AND oi.style_id IS NOT NULL`
   )
     .bind(body.orderItemId, jobId)
-    .first<{ id: string; style_id: string; curbappeal_photo_key: string | null; status: string }>();
+    .first<{
+      id: string;
+      tier: string;
+      style_id: string;
+      style_name: string;
+      custom_text: string | null;
+      night: number;
+      seasonal: number;
+      season_choice: string | null;
+      holiday: number;
+      holiday_choice: string | null;
+      breakdown: number;
+      curbappeal_photo_key: string | null;
+      property_id: string;
+    }>();
 
   if (!slot) {
     return NextResponse.json(
@@ -74,7 +106,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     );
   }
 
-  const model = (await getConfigValue(env.DB, "RENDER_IMAGE_MODEL", DEFAULT_IMAGE_MODEL)) || DEFAULT_IMAGE_MODEL;
+  const model =
+    (await getConfigValue(env.DB, "RENDER_IMAGE_MODEL", DEFAULT_IMAGE_MODEL)) || DEFAULT_IMAGE_MODEL;
 
   let generated;
   try {
@@ -93,6 +126,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }
 
+  // ---- From here the image exists and must not be lost. ----
+
   const storageKey = `renders/${crypto.randomUUID()}.png`;
   await env.MEDIA.put(storageKey, generated.bytes, {
     httpMetadata: { contentType: generated.contentType },
@@ -108,64 +143,76 @@ export async function POST(req: NextRequest, { params }: Params) {
   const renderId = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  // Record the prompt that was ACTUALLY sent, as its own row, and point
-  // the render at it. Previously the render was linked to the newest
-  // QC-approved prompt, which is not necessarily the text that was
-  // rendered — the operator can edit the box, or switch it to the
-  // current template — so the audit trail could not answer "what produced
-  // this image", which is the one question it exists to answer.
-  //
-  // The template label is derived by comparing the submitted text against
-  // the current build and the approved row, rather than trusted from the
-  // client.
-  const ws = await loadJobWorkspace(env.DB, jobId);
-  const currentBuild = ws
-    ? (await buildRenderPrompts(env.DB, jobId, ws.job.propertyId, promptSlotsFrom(ws.slots))).find(
-        (b) => b.orderItemId === body.orderItemId
-      )
-    : undefined;
-  const approvedRow = await env.DB.prepare(
-    `SELECT assembled_prompt, template_version FROM prompt_generations
-     WHERE job_id = ? AND style_id = ? ORDER BY generated_at DESC LIMIT 1`
-  )
-    .bind(jobId, slot.style_id)
-    .first<{ assembled_prompt: string; template_version: string }>();
-
-  const sent = body.prompt.trim();
-  const templateUsed =
-    currentBuild && sent === currentBuild.assembledPrompt.trim()
-      ? PROMPT_TEMPLATE_VERSION
-      : approvedRow && sent === approvedRow.assembled_prompt.trim()
-        ? approvedRow.template_version
-        : "operator-edited";
-
-  const promptGenerationId = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO prompt_generations
-       (id, job_id, style_id, generation_mode, assembled_prompt, negative_prompt, template_version, generated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(
-      promptGenerationId,
-      jobId,
-      slot.style_id,
-      PROMPT_GENERATION_MODE,
-      body.prompt,
-      currentBuild?.negativePrompt ?? null,
-      templateUsed,
-      now
-    )
-    .run();
-  const promptGeneration = { id: promptGenerationId };
-
   await env.DB.prepare(
     `INSERT INTO renders
        (id, job_id, style_id, prompt_generation_id, iteration_number, storage_key,
         selected, revision_count, designer_id, qc_status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, 'pending', ?)`
+     VALUES (?, ?, ?, NULL, ?, ?, 0, 0, ?, 'pending', ?)`
   )
-    .bind(renderId, jobId, slot.style_id, promptGeneration?.id ?? null, iteration, storageKey, staff.id, now)
+    .bind(renderId, jobId, slot.style_id, iteration, storageKey, staff.id, now)
     .run();
+
+  // Bookkeeping: record the prompt that was ACTUALLY sent and point the
+  // render at it. Best-effort by design — the image is already safe, and
+  // losing a provenance record is worth far less than losing the render.
+  let templateUsed = "unrecorded";
+  try {
+    const [built] = await buildRenderPrompts(env.DB, jobId, slot.property_id, [
+      {
+        orderItemId: slot.id,
+        tier: slot.tier,
+        styleId: slot.style_id,
+        styleName: slot.style_name,
+        customText: slot.custom_text,
+        night: slot.night,
+        seasonal: slot.seasonal,
+        seasonChoice: slot.season_choice,
+        holiday: slot.holiday,
+        holidayChoice: slot.holiday_choice,
+        breakdown: slot.breakdown,
+      },
+    ]);
+
+    const approvedRow = await env.DB.prepare(
+      `SELECT assembled_prompt, template_version FROM prompt_generations
+       WHERE job_id = ? AND style_id = ? ORDER BY generated_at DESC LIMIT 1`
+    )
+      .bind(jobId, slot.style_id)
+      .first<{ assembled_prompt: string; template_version: string }>();
+
+    const sent = body.prompt.trim();
+    templateUsed =
+      built && sent === built.assembledPrompt.trim()
+        ? PROMPT_TEMPLATE_VERSION
+        : approvedRow && sent === approvedRow.assembled_prompt.trim()
+          ? approvedRow.template_version
+          : "operator-edited";
+
+    const promptGenerationId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO prompt_generations
+         (id, job_id, style_id, generation_mode, assembled_prompt, negative_prompt, template_version, generated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+      .bind(
+        promptGenerationId,
+        jobId,
+        slot.style_id,
+        PROMPT_GENERATION_MODE,
+        body.prompt,
+        built?.negativePrompt ?? null,
+        templateUsed,
+        now
+      )
+      .run();
+
+    await env.DB.prepare(`UPDATE renders SET prompt_generation_id = ? WHERE id = ?`)
+      .bind(promptGenerationId, renderId)
+      .run();
+  } catch {
+    // Deliberately swallowed: the render is already stored and recorded,
+    // and no provenance row is a far smaller loss than a lost image.
+  }
 
   await env.DB.prepare(
     `INSERT INTO events (id, entity_type, entity_id, event_type, actor_type, actor_id, payload, created_at)
@@ -185,7 +232,6 @@ export async function POST(req: NextRequest, { params }: Params) {
         sourceWidth: generated.sourceWidth,
         sourceHeight: generated.sourceHeight,
         templateUsed,
-        promptGenerationId,
       }),
       now
     )

@@ -378,7 +378,17 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
               }}
             />
           )}
-          {section === "curation-queue" && <CurationQueueSection key={navToken} onOpenJob={openJob} />}
+          {section === "curation-queue" && (
+            <RenderQueueSection
+              key={navToken}
+              eyebrow="Curation"
+              title="Curation Queue"
+              blurb="Every render waiting for a curator to choose its style. Oldest first."
+              endpoint="/api/admin/curation"
+              actionLabel="Curate"
+              onOpenJob={openJob}
+            />
+          )}
           {section === "curation-workspace" && selectedJobId && (
             <JobCurationWorkspaceSection
               key={navToken}
@@ -387,7 +397,17 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
               onSaved={loadDashboard}
             />
           )}
-          {section === "qc-queue" && <QcQueueSection key={navToken} onOpenJob={openQcJob} />}
+          {section === "qc-queue" && (
+            <RenderQueueSection
+              key={navToken}
+              eyebrow="Quality Control"
+              title="QC Queue"
+              blurb="Every render whose style and instruction need checking. Oldest first."
+              endpoint="/api/admin/qc"
+              actionLabel="Check Now"
+              onOpenJob={openQcJob}
+            />
+          )}
           {section === "qc-detail" && selectedJobId && (
             <QcWorkspaceSection
               key={navToken}
@@ -397,7 +417,15 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
             />
           )}
           {section === "production-queue" && (
-            <ProductionQueueSection key={navToken} onOpenJob={openProductionJob} />
+            <RenderQueueSection
+              key={navToken}
+              eyebrow="Production"
+              title="Production Queue"
+              blurb="Every QC-approved render whose image still needs generating. Oldest first."
+              endpoint="/api/admin/production"
+              actionLabel="Open"
+              onOpenJob={openProductionJob}
+            />
           )}
           {section === "production-detail" && selectedJobId && (
             <ProductionWorkspaceSection
@@ -1860,98 +1888,6 @@ function ManualOrderSection({ onCreated }: { onCreated: (orderId: string) => voi
   );
 }
 
-type CurationQueueRow = {
-  job_id: string;
-  property_address: string;
-  curbappeal_photo_key: string | null;
-  unassigned_count: number;
-  oldest_order_at: string;
-};
-
-function CurationQueueSection({ onOpenJob }: { onOpenJob: (jobId: string) => void }) {
-  const [jobs, setJobs] = useState<CurationQueueRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    fetch("/api/admin/curation")
-      .then(async (r) => {
-        const text = await r.text();
-        let parsed: { jobs?: CurationQueueRow[]; error?: string } | null = null;
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
-        }
-        if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
-        return parsed as { jobs: CurationQueueRow[] };
-      })
-      .then((d) => setJobs(d.jobs ?? []))
-      .catch((e: Error) => setError(`Failed to load curation queue: ${e.message}`));
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  return (
-    <>
-      <div className="page-head">
-        <div className="eyebrow">Curation</div>
-        <h1>Curation Queue</h1>
-        <p>Jobs with at least one curated or premium render still waiting on a style. Oldest first.</p>
-      </div>
-
-      {error && <p className="error-text">{error}</p>}
-      {!jobs && !error && <p className="loading">Loading…</p>}
-      {jobs && jobs.length === 0 && <p className="loading">Nothing waiting on curation right now.</p>}
-
-      {jobs && jobs.length > 0 && (
-        <div className="section-block">
-          <table className="data">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Address</th>
-                <th>Unassigned renders</th>
-                <th>Waiting since</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((j) => (
-                <tr key={j.job_id} className="clickable" onClick={() => onOpenJob(j.job_id)}>
-                  <td>
-                    {j.curbappeal_photo_key ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img className="order-thumb" src={`/api/admin/media/${j.curbappeal_photo_key}`} alt="" />
-                    ) : (
-                      <div className="order-thumb order-thumb-empty" />
-                    )}
-                  </td>
-                  <td>{j.property_address}</td>
-                  <td>{j.unassigned_count}</td>
-                  <td>{new Date(j.oldest_order_at).toLocaleString()}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    <button
-                      className="btn-primary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenJob(j.job_id);
-                      }}
-                    >
-                      Curate Now
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </>
-  );
-}
-
 type CurationSlot = {
   id: string;
   order_id: string;
@@ -1980,6 +1916,140 @@ type CurationWorkspaceData = {
   regulatory: RegulatorySummary;
   neighborhood: NeighborhoodSummary;
 };
+
+type RenderQueueRow = {
+  item_id: string;
+  order_id: string;
+  render_no: number;
+  job_id: string;
+  tier: string;
+  stage: string;
+  style_name: string;
+  custom_text: string | null;
+  qc_denied_reason: string | null;
+  qc_denied_style: string | null;
+  property_address: string;
+  curbappeal_photo_key: string | null;
+  created_at: string;
+};
+
+// Curation, QC and Production are the same table over the same shape,
+// differing only in wording and which stage the endpoint selects. Keeping
+// one component means a fix to the queue (like showing the address on every
+// row) lands in all three instead of two of them.
+function RenderQueueSection({
+  eyebrow,
+  title,
+  blurb,
+  endpoint,
+  actionLabel,
+  onOpenJob,
+}: {
+  eyebrow: string;
+  title: string;
+  blurb: string;
+  endpoint: string;
+  actionLabel: string;
+  onOpenJob: (jobId: string) => void;
+}) {
+  const [renders, setRenders] = useState<RenderQueueRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    fetch(endpoint)
+      .then(async (r) => {
+        const text = await r.text();
+        let parsed: { renders?: RenderQueueRow[]; error?: string } | null = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+        return parsed as { renders: RenderQueueRow[] };
+      })
+      .then((d) => setRenders(d.renders ?? []))
+      .catch((e: Error) => setError(`Failed to load ${title}: ${e.message}`));
+  }, [endpoint, title]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return (
+    <>
+      <div className="page-head">
+        <div className="eyebrow">{eyebrow}</div>
+        <h1>{title}</h1>
+        <p>{blurb}</p>
+      </div>
+
+      {error && <p className="error-text">{error}</p>}
+      {!renders && !error && <p className="loading">Loading…</p>}
+      {renders && renders.length === 0 && <p className="loading">Nothing waiting here right now.</p>}
+
+      {renders && renders.length > 0 && (
+        <div className="section-block">
+          <table className="data">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Render</th>
+                <th>Style / Request</th>
+                <th>Address</th>
+                <th>Waiting since</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {renders.map((r) => (
+                <tr key={r.item_id} className="clickable" onClick={() => onOpenJob(r.job_id)}>
+                  <td>
+                    {r.curbappeal_photo_key ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img className="order-thumb" src={`/api/admin/media/${r.curbappeal_photo_key}`} alt="" />
+                    ) : (
+                      <div className="order-thumb order-thumb-empty" />
+                    )}
+                  </td>
+                  <td>
+                    <div className="render-ref">{renderLabel(r.order_id, r.render_no)}</div>
+                    <span className="note">
+                      {TIER_LABELS[r.tier as keyof typeof TIER_LABELS] ?? r.tier}
+                    </span>
+                  </td>
+                  <td>
+                    {r.tier === "premium" && !r.style_name
+                      ? r.custom_text || "Custom request"
+                      : r.style_name || "Style not yet assigned"}
+                    {r.qc_denied_reason && (
+                      <div className="qc-denied">
+                        QC sent back{r.qc_denied_style ? ` (${r.qc_denied_style})` : ""}: {r.qc_denied_reason}
+                      </div>
+                    )}
+                  </td>
+                  <td>{r.property_address}</td>
+                  <td>{new Date(r.created_at).toLocaleString()}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <button
+                      className="btn-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenJob(r.job_id);
+                      }}
+                    >
+                      {actionLabel}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
 
 type AnalysisSummary = { house_type: string; roof_form: string; massing_envelope: string } | null;
 type RegulatorySummary = {
@@ -2279,98 +2349,6 @@ function JobCurationWorkspaceSection({
   );
 }
 
-type QcQueueRow = {
-  job_id: string;
-  property_address: string;
-  curbappeal_photo_key: string | null;
-  render_count: number;
-  oldest_order_at: string;
-};
-
-function QcQueueSection({ onOpenJob }: { onOpenJob: (jobId: string) => void }) {
-  const [jobs, setJobs] = useState<QcQueueRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    fetch("/api/admin/qc")
-      .then(async (r) => {
-        const text = await r.text();
-        let parsed: { jobs?: QcQueueRow[]; error?: string } | null = null;
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
-        }
-        if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
-        return parsed as { jobs: QcQueueRow[] };
-      })
-      .then((d) => setJobs(d.jobs ?? []))
-      .catch((e: Error) => setError(`Failed to load QC queue: ${e.message}`));
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  return (
-    <>
-      <div className="page-head">
-        <div className="eyebrow">Quality Control</div>
-        <h1>QC Queue</h1>
-        <p>Curated orders waiting to be checked and turned into render instructions. Oldest first.</p>
-      </div>
-
-      {error && <p className="error-text">{error}</p>}
-      {!jobs && !error && <p className="loading">Loading…</p>}
-      {jobs && jobs.length === 0 && <p className="loading">Nothing waiting on QC right now.</p>}
-
-      {jobs && jobs.length > 0 && (
-        <div className="section-block">
-          <table className="data">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Address</th>
-                <th>Renders</th>
-                <th>Waiting since</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((j) => (
-                <tr key={j.job_id} className="clickable" onClick={() => onOpenJob(j.job_id)}>
-                  <td>
-                    {j.curbappeal_photo_key ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img className="order-thumb" src={`/api/admin/media/${j.curbappeal_photo_key}`} alt="" />
-                    ) : (
-                      <div className="order-thumb order-thumb-empty" />
-                    )}
-                  </td>
-                  <td>{j.property_address}</td>
-                  <td>{j.render_count}</td>
-                  <td>{new Date(j.oldest_order_at).toLocaleString()}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    <button
-                      className="btn-primary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenJob(j.job_id);
-                      }}
-                    >
-                      Check Now
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </>
-  );
-}
-
 type BuiltPrompt = {
   orderItemId: string;
   styleId: string;
@@ -2615,101 +2593,6 @@ function QcWorkspaceSection({
           </div>
         );
       })}
-    </>
-  );
-}
-
-type ProductionQueueRow = {
-  job_id: string;
-  property_address: string;
-  curbappeal_photo_key: string | null;
-  render_count: number;
-  rendered_count: number;
-  oldest_order_at: string;
-};
-
-function ProductionQueueSection({ onOpenJob }: { onOpenJob: (jobId: string) => void }) {
-  const [jobs, setJobs] = useState<ProductionQueueRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    fetch("/api/admin/production")
-      .then(async (r) => {
-        const text = await r.text();
-        let parsed: { jobs?: ProductionQueueRow[]; error?: string } | null = null;
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
-        }
-        if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
-        return parsed as { jobs: ProductionQueueRow[] };
-      })
-      .then((d) => setJobs(d.jobs ?? []))
-      .catch((e: Error) => setError(`Failed to load production queue: ${e.message}`));
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  return (
-    <>
-      <div className="page-head">
-        <div className="eyebrow">Production</div>
-        <h1>Production Queue</h1>
-        <p>QC-approved orders whose images still need generating. Oldest first.</p>
-      </div>
-
-      {error && <p className="error-text">{error}</p>}
-      {!jobs && !error && <p className="loading">Loading…</p>}
-      {jobs && jobs.length === 0 && <p className="loading">Nothing waiting on production right now.</p>}
-
-      {jobs && jobs.length > 0 && (
-        <div className="section-block">
-          <table className="data">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Address</th>
-                <th>Rendered</th>
-                <th>Waiting since</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((j) => (
-                <tr key={j.job_id} className="clickable" onClick={() => onOpenJob(j.job_id)}>
-                  <td>
-                    {j.curbappeal_photo_key ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img className="order-thumb" src={`/api/admin/media/${j.curbappeal_photo_key}`} alt="" />
-                    ) : (
-                      <div className="order-thumb order-thumb-empty" />
-                    )}
-                  </td>
-                  <td>{j.property_address}</td>
-                  <td>
-                    {j.rendered_count} / {j.render_count}
-                  </td>
-                  <td>{new Date(j.oldest_order_at).toLocaleString()}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    <button
-                      className="btn-primary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenJob(j.job_id);
-                      }}
-                    >
-                      Open
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </>
   );
 }
