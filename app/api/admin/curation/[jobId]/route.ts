@@ -1,26 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
+import { loadJobWorkspace } from "@/lib/jobWorkspace";
+import { recomputeJobOrderStatuses } from "@/lib/orderStage";
 
 type Params = { params: Promise<{ jobId: string }> };
-
-type CurationSlot = {
-  id: string;
-  order_id: string;
-  tier: string;
-  style_id: string | null;
-  style_name: string;
-  // Premium only: the customer's own free-text description of what they
-  // want. The curator reads this and picks the catalog style to build it
-  // from — premium never arrives with a style already chosen.
-  custom_text: string | null;
-  night: number;
-  seasonal: number;
-  season_choice: string | null;
-  holiday: number;
-  holiday_choice: string | null;
-  breakdown: number;
-};
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const staff = await getCurrentStaff();
@@ -29,86 +13,24 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { jobId } = await params;
   const { env } = getCloudflareContext();
 
-  const job = await env.DB.prepare(
-    `SELECT j.id, p.id as property_id, p.address as property_address
-     FROM jobs j JOIN properties p ON p.id = j.property_id WHERE j.id = ?`
-  )
-    .bind(jobId)
-    .first<{ id: string; property_id: string; property_address: string }>();
-
-  if (!job) return NextResponse.json({ error: "job not found" }, { status: 404 });
-
-  // Most recent order on this job that actually has a photo — in practice
-  // there's one order per job today, but this stays correct if that ever
-  // changes (a repeat customer ordering more curated renders later).
-  const photoRow = await env.DB.prepare(
-    `SELECT curbappeal_photo_key FROM orders
-     WHERE job_id = ? AND curbappeal_photo_key IS NOT NULL
-     ORDER BY created_at DESC LIMIT 1`
-  )
-    .bind(jobId)
-    .first<{ curbappeal_photo_key: string }>();
-
-  const slots = await env.DB.prepare(
-    `SELECT oi.id, oi.order_id, oi.tier, oi.style_id, oi.style_name, oi.custom_text,
-            oi.night, oi.seasonal, oi.season_choice, oi.holiday, oi.holiday_choice, oi.breakdown
-     FROM order_items oi JOIN orders o ON o.id = oi.order_id
-     WHERE o.job_id = ? AND oi.tier IN ('curated','premium')
-     ORDER BY oi.rowid ASC`
-  )
-    .bind(jobId)
-    .all<CurationSlot>();
-
-  const analysis = await env.DB.prepare(
-    `SELECT psa.structure_profile_id, sp.house_type, sp.roof_form, sp.massing_envelope
-     FROM curbappeal_property_structure_analysis psa
-     JOIN curbappeal_structure_profiles sp ON sp.id = psa.structure_profile_id
-     WHERE psa.property_id = ?`
-  )
-    .bind(job.property_id)
-    .first<{ structure_profile_id: string; house_type: string; roof_form: string; massing_envelope: string }>();
-
-  const topMatches = analysis
-    ? await env.DB.prepare(
-        `SELECT s.name, c.combined_score_pct, c.fit_tier
-         FROM curbappeal_profile_style_compatibility c JOIN styles s ON s.id = c.style_id
-         WHERE c.structure_profile_id = ? ORDER BY c.combined_score_pct DESC LIMIT 8`
-      )
-        .bind(analysis.structure_profile_id)
-        .all<{ name: string; combined_score_pct: number; fit_tier: string }>()
-    : null;
-
-  const curationRanks = analysis
-    ? await env.DB.prepare(
-        `SELECT rank, style_name, reasoning FROM curbappeal_structure_profile_curation_ranks
-         WHERE structure_profile_id = ? ORDER BY rank ASC`
-      )
-        .bind(analysis.structure_profile_id)
-        .all<{ rank: number; style_name: string; reasoning: string }>()
-    : null;
-
-  const regulatory = await env.DB.prepare(
-    `SELECT zoning_district, historic_overlay, flood_zone, summary FROM curbappeal_property_regulatory_lookups
-     WHERE property_id = ? ORDER BY looked_up_at DESC LIMIT 1`
-  )
-    .bind(job.property_id)
-    .first<{ zoning_district: string | null; historic_overlay: number | null; flood_zone: string | null; summary: string }>();
-
-  const neighborhood = await env.DB.prepare(
-    `SELECT style_read, homes_visible, street_view_key FROM curbappeal_property_neighborhood_reads
-     WHERE property_id = ? ORDER BY created_at DESC LIMIT 1`
-  )
-    .bind(job.property_id)
-    .first<{ style_read: string; homes_visible: number; street_view_key: string | null }>();
+  // Only renders actually waiting on a curator. A render QC has already
+  // cleared, or one still sitting at 'new', has no business showing up in
+  // a curator's workspace.
+  const ws = await loadJobWorkspace(env.DB, jobId, ["awaiting_curation"]);
+  if (!ws) return NextResponse.json({ error: "job not found" }, { status: 404 });
 
   return NextResponse.json({
-    job: { id: job.id, propertyAddress: job.property_address, curbappealPhotoKey: photoRow?.curbappeal_photo_key ?? null },
-    slots: slots.results ?? [],
-    analysis,
-    topMatches: topMatches?.results ?? [],
-    curationRanks: curationRanks?.results ?? [],
-    regulatory,
-    neighborhood,
+    job: {
+      id: ws.job.id,
+      propertyAddress: ws.job.propertyAddress,
+      curbappealPhotoKey: ws.job.curbappealPhotoKey,
+    },
+    slots: ws.slots,
+    analysis: ws.analysis,
+    topMatches: ws.topMatches,
+    curationRanks: ws.curationRanks,
+    regulatory: ws.regulatory,
+    neighborhood: ws.neighborhood,
   });
 }
 
@@ -149,7 +71,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   if (applied.length === 0) {
-    return NextResponse.json({ ok: true, applied: 0, advancedOrders: [] });
+    return NextResponse.json({ ok: true, applied: 0, advancedToQc: 0 });
   }
 
   await env.DB.prepare(
@@ -159,39 +81,22 @@ export async function POST(req: NextRequest, { params }: Params) {
     .bind(crypto.randomUUID(), jobId, staff.id, JSON.stringify({ assignments: applied }), now)
     .run();
 
-  // Curation is finished for an order the moment it has no curated/premium
-  // render left without a style — that's what moves it on to QC. Without
-  // this the order stayed at 'in_curation' forever: it dropped out of the
-  // Curation Queue (which also requires an unassigned item) but never
-  // appeared anywhere else, so a fully-curated order silently vanished
-  // from every queue in the admin.
-  const advancedOrders: string[] = [];
-  const orders = await env.DB.prepare(
-    `SELECT id FROM orders WHERE job_id = ? AND status = 'in_curation'`
-  )
-    .bind(jobId)
-    .all<{ id: string }>();
-
-  for (const o of orders.results ?? []) {
-    const remaining = await env.DB.prepare(
-      `SELECT COUNT(*) as n FROM order_items
-       WHERE order_id = ? AND tier IN ('curated','premium') AND style_id IS NULL`
-    )
-      .bind(o.id)
-      .first<{ n: number }>();
-    if (remaining && remaining.n > 0) continue;
-
-    await env.DB.prepare(`UPDATE orders SET status = 'in_qc', updated_at = ? WHERE id = ?`)
-      .bind(now, o.id)
-      .run();
+  // Assigning a style IS finishing curation for that one render, so it
+  // moves to QC on its own — independently of anything else on the order.
+  // Any earlier QC denial is cleared here: the curator has answered it,
+  // and leaving the note would make the next reviewer think the new style
+  // had been rejected too.
+  for (const a of applied) {
     await env.DB.prepare(
-      `INSERT INTO events (id, entity_type, entity_id, event_type, actor_type, actor_id, payload, created_at)
-       VALUES (?, 'order', ?, 'sent_to_qc', 'staff', ?, ?, ?)`
+      `UPDATE order_items
+       SET stage = 'awaiting_qc', qc_denied_reason = NULL, qc_denied_style = NULL
+       WHERE id = ?`
     )
-      .bind(crypto.randomUUID(), o.id, staff.id, JSON.stringify({ from: "in_curation" }), now)
+      .bind(a.orderItemId)
       .run();
-    advancedOrders.push(o.id);
   }
 
-  return NextResponse.json({ ok: true, applied: applied.length, advancedOrders });
+  await recomputeJobOrderStatuses(env.DB, jobId, now);
+
+  return NextResponse.json({ ok: true, applied: applied.length, advancedToQc: applied.length });
 }

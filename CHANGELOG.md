@@ -3,6 +3,51 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.21.0 — 2026-09-17
+
+**Requires `migrations/0006_order_item_stage.sql` before deploying.** All
+four statements are plain `ALTER TABLE ADD COLUMN` / `UPDATE` — no table
+rebuild — so it is safe to run statement by statement in the D1 console,
+unlike the abandoned CHECK-constraint rebuild.
+
+- **Workflow state moved from the order to the individual render**
+  (`order_items.stage`). An order is a basket: its renders do not move
+  through the pipeline together, and QC denying one must not drag the
+  others backwards. `orders.status` could not express that, and every
+  queue keyed off it was wrong for any order with more than one render.
+  Stages: `new`, `awaiting_curation`, `awaiting_qc`, `in_production`,
+  `complete`, `on_hold`.
+- **No CHECK constraint on `stage`, on purpose.** SQLite cannot alter a
+  CHECK in place, and the rebuild required to change one fails against D1
+  — proven earlier today, when it rolled the whole database back. A CHECK
+  here would freeze the pipeline vocabulary permanently. The allowed
+  values live in `lib/orderStage.ts` and are enforced in application code.
+- **QC can now deny a single render back to curation, with a reason.**
+  Denial clears that render's style, which is what returns it to the
+  Curation Queue — that queue selects on stage alone, so no extra
+  bookkeeping was needed. The rejected style and the reason are kept and
+  shown to the curator above the style picker, and on the order page, so
+  nobody has to guess what was turned down or why. A reason is mandatory.
+- **Approve is per render too**, one at a time rather than a single
+  job-wide button: a bulk control would quietly push through renders the
+  reviewer never actually looked at. Approving records the final prompt
+  and moves that render alone to production.
+- All three queues (Curation, QC, Production) and their dashboard counts
+  now select on `order_items.stage`. Each workspace loads only the renders
+  at its own stage, so a curator never sees renders QC already cleared and
+  production never sees renders still being curated.
+- `orders.status` is now a rollup derived from its renders' stages
+  (`rollupOrderStatus`), recomputed after every stage change so the Orders
+  list can never disagree with the queues. It only ever produces values
+  already in its CHECK constraint, which cannot be changed.
+- "Push to Curator" now only moves renders still sitting at `new`, and
+  says how many. It can no longer drag a render backwards out of a later
+  stage.
+- The order page lists every render with its own stage and any QC denial.
+- Removed the `send-to-qc` recovery route and button added in v0.19.0 —
+  per-render stages make the stranded state it existed to fix unreachable,
+  since assigning a style advances that render immediately.
+
 ## v0.20.0 — 2026-09-17
 
 - **Built the Production Queue and Production workspace** (`GET

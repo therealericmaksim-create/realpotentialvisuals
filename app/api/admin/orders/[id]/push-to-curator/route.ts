@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
+import { recomputeOrderStatus } from "@/lib/orderStage";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -11,41 +12,52 @@ type Params = { params: Promise<{ id: string }> };
 // actually makes a job appear in the Curation Queue, independent of
 // whether analysis ever happened. Any signed-in staff member can do
 // this, same rule as run-analysis.
-export async function POST(_req: Request, { params }: Params) {
+export async function POST(_req: NextRequest, { params }: Params) {
   const staff = await getCurrentStaff();
   if (!staff) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
 
   const { id } = await params;
   const { env } = getCloudflareContext();
 
-  const order = await env.DB.prepare(`SELECT status FROM orders WHERE id = ?`).bind(id).first<{ status: string }>();
+  const order = await env.DB.prepare(`SELECT status FROM orders WHERE id = ?`)
+    .bind(id)
+    .first<{ status: string }>();
   if (!order) return NextResponse.json({ error: "order not found" }, { status: 404 });
-  if (order.status !== "placed" && order.status !== "analyzing") {
-    return NextResponse.json({ error: `Cannot push an order with status '${order.status}' to curation` }, { status: 400 });
-  }
 
-  // Pushing an order with nothing to curate (no unassigned curated- or
-  // premium-tier render) would silently flip its status with zero visible
-  // effect — it would never show up in the Curation Queue, which only
-  // surfaces exactly this condition. Reject it up front instead, with a
-  // message that says why, rather than letting staff wonder why the queue
-  // still says "nothing waiting."
-  const unassigned = await env.DB.prepare(
+  // Only renders still sitting at 'new' move. Anything already in
+  // curation, QC or production is left exactly where it is — pushing an
+  // order must never drag a render backwards out of a later stage.
+  const pending = await env.DB.prepare(
     `SELECT COUNT(*) as n FROM order_items
-     WHERE order_id = ? AND tier IN ('curated','premium') AND style_id IS NULL`
+     WHERE order_id = ? AND tier IN ('curated','premium') AND stage = 'new'`
   )
     .bind(id)
     .first<{ n: number }>();
-  if (!unassigned || unassigned.n === 0) {
+
+  if (!pending || pending.n === 0) {
     return NextResponse.json(
-      { error: "This order has no curated or premium renders needing a style — there's nothing to push to curation." },
+      { error: "No renders on this order are waiting to be sent to a curator." },
       { status: 400 }
     );
   }
 
-  await env.DB.prepare(`UPDATE orders SET status = 'in_curation', updated_at = ? WHERE id = ?`)
-    .bind(new Date().toISOString(), id)
+  const now = new Date().toISOString();
+
+  await env.DB.prepare(
+    `UPDATE order_items SET stage = 'awaiting_curation'
+     WHERE order_id = ? AND tier IN ('curated','premium') AND stage = 'new'`
+  )
+    .bind(id)
     .run();
 
-  return NextResponse.json({ ok: true, status: "in_curation" });
+  await env.DB.prepare(
+    `INSERT INTO events (id, entity_type, entity_id, event_type, actor_type, actor_id, payload, created_at)
+     VALUES (?, 'order', ?, 'pushed_to_curator', 'staff', ?, ?, ?)`
+  )
+    .bind(crypto.randomUUID(), id, staff.id, JSON.stringify({ renders: pending.n }), now)
+    .run();
+
+  const status = await recomputeOrderStatus(env.DB, id, now);
+
+  return NextResponse.json({ ok: true, pushed: pending.n, status });
 }

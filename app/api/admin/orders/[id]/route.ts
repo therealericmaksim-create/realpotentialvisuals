@@ -39,15 +39,19 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 
   const renderItems = await env.DB.prepare(
-    `SELECT tier, style_name, custom_text, night, seasonal, season_choice, holiday, holiday_choice,
+    `SELECT tier, stage, style_name, custom_text, qc_denied_reason, qc_denied_style,
+            night, seasonal, season_choice, holiday, holiday_choice,
             breakdown, unit_price_cents
      FROM order_items WHERE order_id = ?`
   )
     .bind(id)
     .all<{
       tier: string;
+      stage: string;
       style_name: string | null;
       custom_text: string | null;
+      qc_denied_reason: string | null;
+      qc_denied_style: string | null;
       night: number;
       seasonal: number;
       season_choice: string | null;

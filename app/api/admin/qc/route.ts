@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
 
-// The QC Queue: one row per job with an order sitting at status 'in_qc' —
-// i.e. curation finished (every curated/premium render has a style) and
-// the work now needs checking before it goes to production. Keyed off the
-// order status rather than the `renders` table's qc_status: no render rows
-// exist until an operator has actually generated images, so counting those
-// would leave this queue permanently empty while real work piled up
-// invisibly. Same lesson as the Curation Queue's own definition.
+// The QC Queue: one row per job with at least one render at stage
+// 'awaiting_qc' — a curator has chosen its style and that choice, plus the
+// render instruction built from it, now needs checking.
+//
+// Keyed off the render's stage, not the order's status and not the
+// `renders` table's qc_status. renders rows only exist once images have
+// been generated, which happens AFTER this stage, so a qc_status-based
+// queue would sit empty while real work piled up.
 
 type QcQueueRow = {
   job_id: string;
@@ -33,8 +34,8 @@ export async function GET() {
      FROM orders o
      JOIN jobs j ON j.id = o.job_id
      JOIN properties p ON p.id = j.property_id
-     JOIN order_items oi ON oi.order_id = o.id AND oi.tier IN ('curated','premium')
-     WHERE o.status = 'in_qc'
+     JOIN order_items oi ON oi.order_id = o.id
+     WHERE oi.stage = 'awaiting_qc'
      GROUP BY j.id
      ORDER BY oldest_order_at ASC`
   ).all<QcQueueRow>();

@@ -118,6 +118,14 @@ Role: **designer**.
 
 ---
 
+> **Pipeline state lives on `order_items.stage`, not `orders.status`.**
+> Every queue below selects on that column. Renders move independently —
+> QC can send one back to the curator while another is already rendering —
+> so `orders.status` is only a rollup kept for the Orders list. Stages:
+> `new`, `awaiting_curation`, `awaiting_qc`, `in_production`, `complete`,
+> `on_hold` (where self_directed sits, that path being deferred).
+> See `lib/orderStage.ts` and `migrations/0006`.
+
 ## 5. Quality Control — *(QC Queue built; history/delivered still planned)*
 
 - **QC Queue** *(built)* — orders at `status = 'in_qc'`, i.e. curation has

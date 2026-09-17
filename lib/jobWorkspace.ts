@@ -9,9 +9,12 @@ export type WorkspaceSlot = {
   id: string;
   order_id: string;
   tier: string;
+  stage: string;
   style_id: string | null;
   style_name: string;
   custom_text: string | null;
+  qc_denied_reason: string | null;
+  qc_denied_style: string | null;
   night: number;
   seasonal: number;
   season_choice: string | null;
@@ -45,9 +48,14 @@ export type JobWorkspace = {
   neighborhood: { style_read: string; homes_visible: number; street_view_key: string | null } | null;
 };
 
+// `stages` narrows the slots to the ones a given queue cares about — the
+// QC workspace should not show renders that are still being curated, and
+// production should not show renders QC hasn't cleared. Omit it to load
+// every render on the job.
 export async function loadJobWorkspace(
   db: D1Database,
-  jobId: string
+  jobId: string,
+  stages?: readonly string[]
 ): Promise<JobWorkspace | null> {
   const job = await db
     .prepare(
@@ -68,15 +76,21 @@ export async function loadJobWorkspace(
     .bind(jobId)
     .first<{ curbappeal_photo_key: string }>();
 
+  const stageFilter =
+    stages && stages.length > 0
+      ? ` AND oi.stage IN (${stages.map(() => "?").join(",")})`
+      : "";
+
   const slots = await db
     .prepare(
-      `SELECT oi.id, oi.order_id, oi.tier, oi.style_id, oi.style_name, oi.custom_text,
+      `SELECT oi.id, oi.order_id, oi.tier, oi.stage, oi.style_id, oi.style_name,
+              oi.custom_text, oi.qc_denied_reason, oi.qc_denied_style,
               oi.night, oi.seasonal, oi.season_choice, oi.holiday, oi.holiday_choice, oi.breakdown
        FROM order_items oi JOIN orders o ON o.id = oi.order_id
-       WHERE o.job_id = ? AND oi.tier IN ('curated','premium')
+       WHERE o.job_id = ?${stageFilter}
        ORDER BY oi.rowid ASC`
     )
-    .bind(jobId)
+    .bind(jobId, ...(stages ?? []))
     .all<WorkspaceSlot>();
 
   const analysis = await db

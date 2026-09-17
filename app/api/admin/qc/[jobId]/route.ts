@@ -3,15 +3,22 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
 import { buildRenderPrompts, PROMPT_GENERATION_MODE, PROMPT_TEMPLATE_VERSION } from "@/lib/renderPrompt";
 import { loadJobWorkspace, promptSlotsFrom } from "@/lib/jobWorkspace";
+import { recomputeJobOrderStatuses } from "@/lib/orderStage";
 
 // The QC workspace ("Check Now"): everything the curator saw, so the
 // reviewer can second-guess the style choice against the same evidence,
-// plus the assembled image-generation instruction for each ordered render.
+// plus the assembled image-generation instruction for each render waiting
+// on review.
+//
+// Approve and deny are both per-render. That is the whole point of stages
+// living on order_items: one render can go back to the curator while its
+// neighbours carry on to production untouched.
+//
 // Prompts are rebuilt fresh on every GET rather than read back from
 // prompt_generations — the catalog and the structure profile are the
 // source of truth, and a stale saved prompt is worse than no saved prompt.
-// Saved copies are written on approval, as the audit record of what was
-// actually sent to production.
+// Saved copies are written on approval, as the audit record of what
+// production was actually told to render.
 
 type Params = { params: Promise<{ jobId: string }> };
 
@@ -22,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { jobId } = await params;
   const { env } = getCloudflareContext();
 
-  const ws = await loadJobWorkspace(env.DB, jobId);
+  const ws = await loadJobWorkspace(env.DB, jobId, ["awaiting_qc"]);
   if (!ws) return NextResponse.json({ error: "job not found" }, { status: 404 });
 
   const prompts = await buildRenderPrompts(
@@ -48,86 +55,128 @@ export async function GET(_req: NextRequest, { params }: Params) {
   });
 }
 
-type ApproveBody = {
+type DecisionBody = {
+  action?: "approve" | "deny";
+  orderItemIds?: string[];
+  // approve only — the exact text the reviewer settled on, which may
+  // differ from what the builder produced.
   prompts?: { orderItemId: string; assembledPrompt: string; negativePrompt: string }[];
+  // deny only — why, shown to the curator who picks again.
+  reason?: string;
 };
 
-// Approving is the QC sign-off: it records the exact prompt text the
-// reviewer settled on (they can edit what the builder produced before
-// approving) and moves every in_qc order on this job to 'in_progress',
-// which is what takes it out of this queue and into production.
 export async function POST(req: NextRequest, { params }: Params) {
   const staff = await getCurrentStaff();
   if (!staff) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
 
   const { jobId } = await params;
-  const body = (await req.json()) as ApproveBody;
-  const submitted = body.prompts ?? [];
+  const body = (await req.json()) as DecisionBody;
+  const action = body.action;
+  const ids = body.orderItemIds ?? [];
 
-  const { env } = getCloudflareContext();
-  const now = new Date().toISOString();
-
-  const orders = await env.DB.prepare(
-    `SELECT id FROM orders WHERE job_id = ? AND status = 'in_qc'`
-  )
-    .bind(jobId)
-    .all<{ id: string }>();
-  const orderRows = orders.results ?? [];
-
-  if (orderRows.length === 0) {
+  if (action !== "approve" && action !== "deny") {
+    return NextResponse.json({ error: "action must be 'approve' or 'deny'" }, { status: 400 });
+  }
+  if (ids.length === 0) {
+    return NextResponse.json({ error: "No renders were selected" }, { status: 400 });
+  }
+  if (action === "deny" && !body.reason?.trim()) {
     return NextResponse.json(
-      { error: "No order on this job is awaiting QC — it may have already been approved." },
+      { error: "A reason is required — the curator needs to know what to change." },
       { status: 400 }
     );
   }
 
-  // Only persist prompts for render slots that really belong to this job,
-  // so a tampered orderItemId can't write a prompt_generations row against
-  // someone else's job.
-  for (const p of submitted) {
+  const { env } = getCloudflareContext();
+  const now = new Date().toISOString();
+  const reason = body.reason?.trim() ?? "";
+  const promptByItem = new Map((body.prompts ?? []).map((p) => [p.orderItemId, p]));
+  const handled: string[] = [];
+
+  for (const itemId of ids) {
+    // Scoped to this job AND to the awaiting_qc stage, so a stale page or
+    // a tampered id can't decide a render that isn't actually under
+    // review — including one a colleague just decided.
     const slot = await env.DB.prepare(
-      `SELECT oi.style_id FROM order_items oi JOIN orders o ON o.id = oi.order_id
-       WHERE oi.id = ? AND o.job_id = ? AND oi.style_id IS NOT NULL`
+      `SELECT oi.id, oi.style_id, oi.style_name
+       FROM order_items oi JOIN orders o ON o.id = oi.order_id
+       WHERE oi.id = ? AND o.job_id = ? AND oi.stage = 'awaiting_qc'`
     )
-      .bind(p.orderItemId, jobId)
-      .first<{ style_id: string }>();
+      .bind(itemId, jobId)
+      .first<{ id: string; style_id: string | null; style_name: string }>();
     if (!slot) continue;
 
-    await env.DB.prepare(
-      `INSERT INTO prompt_generations
-         (id, job_id, style_id, generation_mode, assembled_prompt, negative_prompt, template_version, generated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        crypto.randomUUID(),
-        jobId,
-        slot.style_id,
-        PROMPT_GENERATION_MODE,
-        p.assembledPrompt,
-        p.negativePrompt,
-        PROMPT_TEMPLATE_VERSION,
-        now
-      )
-      .run();
-  }
+    if (action === "approve") {
+      const submitted = promptByItem.get(itemId);
+      if (submitted && slot.style_id) {
+        await env.DB.prepare(
+          `INSERT INTO prompt_generations
+             (id, job_id, style_id, generation_mode, assembled_prompt, negative_prompt, template_version, generated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+          .bind(
+            crypto.randomUUID(),
+            jobId,
+            slot.style_id,
+            PROMPT_GENERATION_MODE,
+            submitted.assembledPrompt,
+            submitted.negativePrompt,
+            PROMPT_TEMPLATE_VERSION,
+            now
+          )
+          .run();
+      }
 
-  for (const o of orderRows) {
-    await env.DB.prepare(`UPDATE orders SET status = 'in_progress', updated_at = ? WHERE id = ?`)
-      .bind(now, o.id)
-      .run();
+      await env.DB.prepare(`UPDATE order_items SET stage = 'in_production' WHERE id = ?`)
+        .bind(itemId)
+        .run();
+    } else {
+      // Denial clears the style, which is what puts the render back in
+      // the Curation Queue — that queue selects on stage alone, so no
+      // extra bookkeeping is needed. The rejected style is kept so the
+      // curator can see what was turned down rather than guessing.
+      await env.DB.prepare(
+        `UPDATE order_items
+         SET stage = 'awaiting_curation',
+             style_id = NULL,
+             style_name = '',
+             qc_denied_reason = ?,
+             qc_denied_style = ?
+         WHERE id = ?`
+      )
+        .bind(reason, slot.style_name || null, itemId)
+        .run();
+    }
+
     await env.DB.prepare(
       `INSERT INTO events (id, entity_type, entity_id, event_type, actor_type, actor_id, payload, created_at)
-       VALUES (?, 'order', ?, 'qc_approved', 'staff', ?, ?, ?)`
+       VALUES (?, 'order_item', ?, ?, 'staff', ?, ?, ?)`
     )
       .bind(
         crypto.randomUUID(),
-        o.id,
+        itemId,
+        action === "approve" ? "qc_approved" : "qc_denied",
         staff.id,
-        JSON.stringify({ promptsSaved: submitted.length }),
+        JSON.stringify(
+          action === "approve"
+            ? { jobId, styleName: slot.style_name }
+            : { jobId, rejectedStyle: slot.style_name, reason }
+        ),
         now
       )
       .run();
+
+    handled.push(itemId);
   }
 
-  return NextResponse.json({ ok: true, approvedOrders: orderRows.length, promptsSaved: submitted.length });
+  if (handled.length === 0) {
+    return NextResponse.json(
+      { error: "None of those renders are awaiting QC — the page may be out of date." },
+      { status: 400 }
+    );
+  }
+
+  await recomputeJobOrderStatuses(env.DB, jobId, now);
+
+  return NextResponse.json({ ok: true, action, handled: handled.length });
 }

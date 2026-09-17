@@ -16,6 +16,7 @@ import {
 } from "@/lib/pricing";
 import { STYLE_FAMILIES } from "@/lib/styles";
 import { orderStatusLabel } from "@/lib/orderDisplay";
+import { stageLabel } from "@/lib/orderStage";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import "./admin.css";
 
@@ -392,7 +393,7 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
               key={navToken}
               jobId={selectedJobId}
               onBack={() => goTo("qc-queue")}
-              onApproved={loadDashboard}
+              onDecided={loadDashboard}
             />
           )}
           {section === "production-queue" && (
@@ -714,8 +715,11 @@ function OrdersListSection({
 
 type OrderRenderItem = {
   tier: string;
+  stage: string;
   style_name: string | null;
   custom_text: string | null;
+  qc_denied_reason: string | null;
+  qc_denied_style: string | null;
   night: number;
   seasonal: number;
   season_choice: string | null;
@@ -767,7 +771,6 @@ function OrderDetailSection({
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [pushing, setPushing] = useState(false);
-  const [sendingToQc, setSendingToQc] = useState(false);
   const [showFullRegulatory, setShowFullRegulatory] = useState(false);
 
   const load = useCallback(() => {
@@ -802,28 +805,6 @@ function OrderDetailSection({
     }
   }
 
-  async function sendToQc() {
-    setSendingToQc(true);
-    setError(null);
-    try {
-      const r = await fetch(`/api/admin/orders/${orderId}/send-to-qc`, { method: "POST" });
-      const text = await r.text();
-      let parsed: { error?: string } | null = null;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
-      }
-      if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
-      load();
-      onRan();
-    } catch (e) {
-      setError(`Failed to send to QC: ${(e as Error).message}`);
-    } finally {
-      setSendingToQc(false);
-    }
-  }
-
   async function pushToCurator() {
     setPushing(true);
     setError(null);
@@ -851,11 +832,12 @@ function OrderDetailSection({
 
   const { order, renderItems, analysis, consensus, topMatches, curationRanks, regulatory, neighborhood } = data;
   const total = (order.total_amount_cents / 100).toFixed(2);
-  // Curated and premium both need a curator to assign a style; only
-  // self_directed arrives with one already picked by the customer.
-  const hasUnassignedCuration = renderItems.some(
-    (item) => (item.tier === "curated" || item.tier === "premium") && !item.style_name
-  );
+  // Stages live per render now, so "can this be pushed" is about how many
+  // renders are still sitting at 'new' — not about the order's rolled-up
+  // status, which says nothing about any individual render.
+  const pushableCount = renderItems.filter(
+    (item) => (item.tier === "curated" || item.tier === "premium") && item.stage === "new"
+  ).length;
 
   return (
     <>
@@ -895,6 +877,7 @@ function OrderDetailSection({
             <thead>
               <tr>
                 <th>Tier</th>
+                <th>Stage</th>
                 <th>Style / Request</th>
                 <th>Extras</th>
                 <th>Breakdown</th>
@@ -910,6 +893,14 @@ function OrderDetailSection({
                 return (
                   <tr key={i}>
                     <td>{TIER_LABELS[item.tier as keyof typeof TIER_LABELS] ?? item.tier}</td>
+                    <td>
+                      <span className="pill">{stageLabel(item.stage)}</span>
+                      {item.qc_denied_reason && (
+                        <div className="note" style={{ marginTop: 4 }}>
+                          QC denied{item.qc_denied_style ? ` ${item.qc_denied_style}` : ""}: {item.qc_denied_reason}
+                        </div>
+                      )}
+                    </td>
                     <td>
                       {item.tier === "premium" ? (
                         <>
@@ -940,22 +931,17 @@ function OrderDetailSection({
           <button className="btn-primary" onClick={runAnalysis} disabled={running}>
             {running ? "Running…" : analysis ? "Re-run Analysis" : "Run Analysis"}
           </button>
-          {(order.status === "placed" || order.status === "analyzing") && hasUnassignedCuration && (
+          {pushableCount > 0 && (
             <button className="cfg-remove" onClick={pushToCurator} disabled={pushing}>
-              {pushing ? "Pushing…" : "Push to Curator"}
+              {pushing ? "Pushing…" : `Push ${pushableCount} to Curator`}
             </button>
           )}
-          {(order.status === "placed" || order.status === "analyzing") && !hasUnassignedCuration && (
-            <span className="note">No curated or premium renders on this order — nothing to push to curation.</span>
+          {pushableCount === 0 && (
+            <span className="note">
+              Every curated/premium render on this order is already moving through the pipeline — see the
+              stage on each below.
+            </span>
           )}
-          {order.status === "in_curation" && <span className="pill">pushed to curator</span>}
-          {order.status === "in_curation" && !hasUnassignedCuration && (
-            <button className="btn-primary" onClick={sendToQc} disabled={sendingToQc}>
-              {sendingToQc ? "Sending…" : "Send to QC"}
-            </button>
-          )}
-          {order.status === "in_qc" && <span className="pill">awaiting QC</span>}
-          {order.status === "in_progress" && <span className="pill">in production</span>}
         </div>
       )}
 
@@ -1908,9 +1894,12 @@ type CurationSlot = {
   id: string;
   order_id: string;
   tier: string;
+  stage: string;
   style_id: string | null;
   style_name: string;
   custom_text: string | null;
+  qc_denied_reason: string | null;
+  qc_denied_style: string | null;
   night: number;
   seasonal: number;
   season_choice: string | null;
@@ -2068,8 +2057,9 @@ function JobCurationWorkspaceSection({
   if (!data) return <p className="loading">Loading…</p>;
 
   const { job, slots, analysis, topMatches, curationRanks, regulatory, neighborhood } = data;
-  const unassigned = slots.filter((s) => !s.style_id);
-  const assignedAlready = slots.filter((s) => s.style_id);
+  // Everything this endpoint returns is at stage 'awaiting_curation', so
+  // there is no assigned/unassigned split to make here any more.
+  const unassigned = slots;
 
   // Candidate options: AI-ranked first (already narrowed + reasoned),
   // then any other algorithm top match not already covered, then an
@@ -2097,14 +2087,14 @@ function JobCurationWorkspaceSection({
         body: JSON.stringify({ assignments: toSubmit }),
       });
       const text = await r.text();
-      let parsed: { error?: string; advancedOrders?: string[] } | null = null;
+      let parsed: { error?: string; advancedToQc?: number } | null = null;
       try {
         parsed = JSON.parse(text);
       } catch {
         throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
       }
       if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
-      setSentToQc((parsed?.advancedOrders ?? []).length > 0);
+      setSentToQc((parsed?.advancedToQc ?? 0) > 0);
       setAssignments({});
       load();
       onSaved();
@@ -2121,13 +2111,16 @@ function JobCurationWorkspaceSection({
       <div className="page-head">
         <div className="eyebrow">Curation</div>
         <h1>{job.propertyAddress}</h1>
-        <p>{unassigned.length} render{unassigned.length === 1 ? "" : "s"} waiting on a style.</p>
+        <p>
+          {unassigned.length} render{unassigned.length === 1 ? "" : "s"} waiting on a style
+          {slots.some((s) => s.qc_denied_reason) ? ", including some QC sent back" : ""}.
+        </p>
       </div>
 
       {sentToQc && (
         <p className="note">
-          Every render on this order now has a style — the order has moved to <strong>Quality Control</strong> and
-          is waiting in the QC Queue.
+          Saved — each render you styled has moved to <strong>Quality Control</strong> on its own. Any render
+          still listed below is still waiting on you.
         </p>
       )}
 
@@ -2161,17 +2154,6 @@ function JobCurationWorkspaceSection({
         curationRanks={curationRanks}
       />
 
-      {assignedAlready.length > 0 && (
-        <div className="section-block">
-          <h3>Already assigned</h3>
-          {assignedAlready.map((s) => (
-            <div key={s.id} className="empty-row">
-              {s.style_name} <span className="note">— {slotLabel(s)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
       {unassigned.length > 0 && (
         <div className="section-block">
           <h3>Assign styles</h3>
@@ -2184,6 +2166,12 @@ function JobCurationWorkspaceSection({
               {s.tier === "premium" && (
                 <span className="note" style={{ whiteSpace: "pre-wrap" }}>
                   Customer&apos;s request: {s.custom_text || "(none provided)"}
+                </span>
+              )}
+              {s.qc_denied_reason && (
+                <span className="qc-denied">
+                  Sent back by QC
+                  {s.qc_denied_style ? ` — ${s.qc_denied_style} was rejected` : ""}: {s.qc_denied_reason}
                 </span>
               )}
               <select value={assignments[s.id] ?? ""} onChange={(e) => setAssignment(s.id, e.target.value)}>
@@ -2341,11 +2329,11 @@ type QcWorkspaceData = {
 function QcWorkspaceSection({
   jobId,
   onBack,
-  onApproved,
+  onDecided,
 }: {
   jobId: string;
   onBack: () => void;
-  onApproved: () => void;
+  onDecided: () => void;
 }) {
   const [data, setData] = useState<QcWorkspaceData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -2353,9 +2341,10 @@ function QcWorkspaceSection({
   // reviewer is expected to tighten, and whatever they approve is what
   // gets recorded as the instruction production actually worked from.
   const [edited, setEdited] = useState<Record<string, string>>({});
-  const [approving, setApproving] = useState(false);
-  const [approved, setApproved] = useState(false);
+  const [denyReason, setDenyReason] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch(`/api/admin/qc/${jobId}`)
@@ -2378,7 +2367,7 @@ function QcWorkspaceSection({
     load();
   }, [load]);
 
-  if (error) return <p className="error-text">{error}</p>;
+  if (error && !data) return <p className="error-text">{error}</p>;
   if (!data) return <p className="loading">Loading…</p>;
 
   const { job, slots, prompts, analysis, topMatches, curationRanks, regulatory, neighborhood } = data;
@@ -2397,19 +2386,31 @@ function QcWorkspaceSection({
     }
   }
 
-  async function approve() {
-    setApproving(true);
+  // One render at a time, deliberately: approving and denying are
+  // per-render decisions now, and a bulk control would quietly push
+  // through renders the reviewer never actually looked at.
+  async function decide(p: BuiltPrompt, action: "approve" | "deny") {
+    setBusyId(p.orderItemId);
     setError(null);
+    setLastResult(null);
     try {
       const r = await fetch(`/api/admin/qc/${jobId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompts: prompts.map((p) => ({
-            orderItemId: p.orderItemId,
-            assembledPrompt: promptText(p),
-            negativePrompt: p.negativePrompt,
-          })),
+          action,
+          orderItemIds: [p.orderItemId],
+          reason: action === "deny" ? denyReason[p.orderItemId] ?? "" : undefined,
+          prompts:
+            action === "approve"
+              ? [
+                  {
+                    orderItemId: p.orderItemId,
+                    assembledPrompt: promptText(p),
+                    negativePrompt: p.negativePrompt,
+                  },
+                ]
+              : undefined,
         }),
       });
       const text = await r.text();
@@ -2419,13 +2420,18 @@ function QcWorkspaceSection({
       } catch {
         throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
       }
-      if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
-      setApproved(true);
-      onApproved();
+      if (!r.ok) throw new Error(parsed?.error ?? `HTTP ${r.status}`);
+      setLastResult(
+        action === "approve"
+          ? `${p.styleName} approved — sent to production.`
+          : `${p.styleName} denied — back with the curator.`
+      );
+      load();
+      onDecided();
     } catch (e) {
-      setError(`Failed to approve: ${(e as Error).message}`);
+      setError(`Could not ${action} that render: ${(e as Error).message}`);
     } finally {
-      setApproving(false);
+      setBusyId(null);
     }
   }
 
@@ -2435,15 +2441,11 @@ function QcWorkspaceSection({
       <div className="page-head">
         <div className="eyebrow">Quality Control</div>
         <h1>{job.propertyAddress}</h1>
-        <p>{prompts.length} render{prompts.length === 1 ? "" : "s"} to check and instruct.</p>
+        <p>{prompts.length} render{prompts.length === 1 ? "" : "s"} awaiting review.</p>
       </div>
 
-      {approved && (
-        <p className="note">
-          Approved — prompts recorded and this order has moved to <strong>production</strong>. It has left the QC
-          queue.
-        </p>
-      )}
+      {error && <p className="error-text">{error}</p>}
+      {lastResult && <p className="note">{lastResult}</p>}
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         {job.curbappealPhotoKey && (
@@ -2475,65 +2477,73 @@ function QcWorkspaceSection({
         curationRanks={curationRanks}
       />
 
-      <div className="section-block">
-        <h3>Curator&apos;s selections</h3>
-        {slots.map((s) => (
-          <div key={s.id} className="empty-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 2 }}>
-            <strong>
-              {s.tier === "premium" ? "Premium" : "Curated"} — {s.style_name || "no style assigned"}
-            </strong>
-            <span className="note">{slotLabel(s)}</span>
-            {s.tier === "premium" && s.custom_text && (
-              <span className="note" style={{ whiteSpace: "pre-wrap" }}>
-                Customer&apos;s request: {s.custom_text}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
+      {prompts.length === 0 && (
+        <div className="section-block">
+          <p className="note">
+            Nothing on this job is awaiting QC any more — every render has been decided. Head back to the queue.
+          </p>
+        </div>
+      )}
 
-      <div className="section-block">
-        <h3>Render instructions</h3>
-        <p className="note">
-          Generated from the style catalog and this house&apos;s measured structure. Edit anything that needs
-          tightening, copy it into the image generator, then approve — the text you approve is what gets recorded
-          as the instruction for this render.
-        </p>
-
-        {prompts.length === 0 && (
-          <p className="note">No render on this job has a style assigned yet, so there is nothing to instruct.</p>
-        )}
-
-        {prompts.map((p, i) => (
-          <div key={p.orderItemId} style={{ marginTop: 18 }}>
-            <strong>
+      {prompts.map((p, i) => {
+        const slot = slots.find((s) => s.id === p.orderItemId);
+        return (
+          <div className="section-block" key={p.orderItemId}>
+            <h3>
               Render #{i + 1} — {p.styleName}{" "}
               <span className="note">({p.tier === "premium" ? "Premium" : "Curated"})</span>
-            </strong>
+            </h3>
+            {slot?.tier === "premium" && slot.custom_text && (
+              <p className="note" style={{ whiteSpace: "pre-wrap" }}>
+                Customer&apos;s request: {slot.custom_text}
+              </p>
+            )}
+            {slot && <p className="note">{slotLabel(slot)}</p>}
+
             <textarea
               className="prompt-box"
               value={promptText(p)}
               onChange={(e) => setEdited((cur) => ({ ...cur, [p.orderItemId]: e.target.value }))}
-              rows={18}
+              rows={16}
             />
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 6 }}>
-              <button type="button" className="btn-primary" onClick={() => copyPrompt(p)}>
+              <button type="button" className="stat-link" onClick={() => copyPrompt(p)}>
                 {copiedId === p.orderItemId ? "Copied" : "Copy prompt"}
               </button>
               <span className="note">Template {p.templateVersion}</span>
             </div>
-            <div style={{ marginTop: 8 }}>
-              <span className="note">Negative prompt (avoid): {p.negativePrompt}</span>
+
+            <div className="qc-decide">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => decide(p, "approve")}
+                disabled={busyId !== null}
+              >
+                {busyId === p.orderItemId ? "Working…" : "Approve → Production"}
+              </button>
+              <input
+                type="text"
+                placeholder="Reason to send back to the curator…"
+                value={denyReason[p.orderItemId] ?? ""}
+                onChange={(e) => setDenyReason((cur) => ({ ...cur, [p.orderItemId]: e.target.value }))}
+              />
+              <button
+                type="button"
+                className="cfg-remove"
+                onClick={() => decide(p, "deny")}
+                disabled={busyId !== null || !(denyReason[p.orderItemId] ?? "").trim()}
+              >
+                Deny → Curation
+              </button>
+            </div>
+            <div className="note" style={{ marginTop: 4 }}>
+              Denying clears the style and puts this one render back in the Curation Queue with your reason
+              attached. Everything else on this order carries on untouched.
             </div>
           </div>
-        ))}
-      </div>
-
-      {prompts.length > 0 && !approved && (
-        <button className="btn-primary" type="button" onClick={approve} disabled={approving} style={{ marginTop: 16 }}>
-          {approving ? "Approving…" : "Approve & Send to Production"}
-        </button>
-      )}
+        );
+      })}
     </>
   );
 }

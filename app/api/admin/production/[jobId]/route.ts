@@ -24,7 +24,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { jobId } = await params;
   const { env } = getCloudflareContext();
 
-  const ws = await loadJobWorkspace(env.DB, jobId);
+  const ws = await loadJobWorkspace(env.DB, jobId, ["in_production"]);
   if (!ws) return NextResponse.json({ error: "job not found" }, { status: 404 });
 
   const built = await buildRenderPrompts(env.DB, jobId, ws.job.propertyId, promptSlotsFrom(ws.slots));

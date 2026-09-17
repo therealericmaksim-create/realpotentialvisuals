@@ -2,22 +2,22 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
 
-// The Curation Queue: one row per job that has at least one curated- or
-// premium-tier render still unassigned (order_items.style_id IS NULL) on
-// an order an admin explicitly pushed to curation (status = 'in_curation',
-// set by POST /api/admin/orders/[id]/push-to-curator). Premium belongs
-// here for the same reason curated does — the customer never picks a
-// style, so a human has to; the only difference is premium arrives with
-// the customer's own free-text request (order_items.custom_text) that the
-// curator works from. Only self_directed skips this queue, because the
-// customer already chose their own style at checkout.
+// The Curation Queue: one row per job with at least one render at
+// stage 'awaiting_curation'. Keyed off the RENDER's stage, not the
+// order's status — renders move through the pipeline independently, so an
+// order can have one render back in curation while another is already
+// rendering.
+//
+// Renders reach this stage either from "Push to Curator" on the order
+// page, or by being denied in QC. Premium belongs here for the same
+// reason curated does — that customer never picks a style either, they
+// write a free-text request (order_items.custom_text) the curator works
+// from. self_directed sits at 'on_hold' and never appears.
 //
 // Deliberately NOT gated on analysis having run — curation is a human
 // picking a style for a render slot, which doesn't require AI analysis
-// first; that's why this is an explicit staff action rather than
-// automatic once analysis completes or once a curated-tier item exists.
-// Any signed-in staff member can view this, same rule as run-analysis:
-// it's operational queue visibility, not a who-can-do-what permission.
+// first. Any signed-in staff member can view this, same rule as
+// run-analysis: it's operational queue visibility, not a permission.
 
 type QueueRow = {
   job_id: string;
@@ -43,7 +43,7 @@ export async function GET() {
      JOIN orders o ON o.id = oi.order_id
      JOIN jobs j ON j.id = o.job_id
      JOIN properties p ON p.id = j.property_id
-     WHERE oi.tier IN ('curated','premium') AND oi.style_id IS NULL AND o.status = 'in_curation'
+     WHERE oi.stage = 'awaiting_curation'
      GROUP BY j.id
      ORDER BY oldest_order_at ASC`
   ).all<QueueRow>();
