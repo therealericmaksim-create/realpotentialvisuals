@@ -2650,6 +2650,8 @@ function ProductionWorkspaceSection({
   // like nothing happened even when the text had changed hundreds of
   // lines down.
   const [switched, setSwitched] = useState<Record<string, string>>({});
+  // Per-render failure text, shown next to that render's own button.
+  const [renderError, setRenderError] = useState<Record<string, string>>({});
 
   const load = useCallback(() => {
     fetch(`/api/admin/production/${jobId}`)
@@ -2714,6 +2716,7 @@ function ProductionWorkspaceSection({
   async function renderSlot(p: ProductionPrompt) {
     setRenderingId(p.orderItemId);
     setError(null);
+    setRenderError((cur) => ({ ...cur, [p.orderItemId]: "" }));
     try {
       const r = await fetch(`/api/admin/production/${jobId}/render`, {
         method: "POST",
@@ -2731,7 +2734,7 @@ function ProductionWorkspaceSection({
       load();
       onRendered();
     } catch (e) {
-      setError(`Render failed: ${(e as Error).message}`);
+      setRenderError((cur) => ({ ...cur, [p.orderItemId]: `Render failed: ${(e as Error).message}` }));
     } finally {
       setRenderingId(null);
     }
@@ -2833,6 +2836,13 @@ function ProductionWorkspaceSection({
                 </strong>
                 . Whatever is in it is exactly what gets sent and recorded.
               </div>
+
+              {/* Right beside the button that triggered it. The section-level
+                  error sits far above a long prompt box, so a fast failure
+                  looked like the button simply doing nothing. */}
+              {renderError[p.orderItemId] && (
+                <p className="error-text" style={{ marginTop: 8 }}>{renderError[p.orderItemId]}</p>
+              )}
 
               <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 6 }}>
                 <button

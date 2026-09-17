@@ -3,6 +3,28 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.23.2 — 2026-09-17
+
+- **Fixed: Render with AI failing in about a second with no image.** The
+  output size was computed from the source photo with no MINIMUM, so a
+  small upload produced a request like 400x304 — below what the image API
+  accepts — and was rejected almost immediately. The long edge is now
+  scaled up to at least 1024 before the maximum is applied, which also
+  means a paying customer never receives a render smaller than that
+  regardless of what they photographed it on. Header-parsed dimensions are
+  also sanity-checked (64-20000px) and fall back to a safe default rather
+  than being trusted into a nonsense size request. Every case in a
+  nine-case check now produces a size that satisfies the API rules:
+  divisible by 16, ratio within 1:3-3:1, within 3840x2160, long edge at
+  least 1024.
+- **Render failures now appear next to the render button**, per render,
+  instead of only at the top of the section. Above a long prompt box the
+  section-level error was off-screen, so a fast failure looked like the
+  button doing nothing at all.
+- Rejections from the image model now report what was asked for — model,
+  requested size and the source dimensions — not just the response body.
+  A size or model rejection is unactionable without them.
+
 ## v0.23.1 — 2026-09-17
 
 - **Fixed: the Render with AI button stopped working.** v0.23.0 recorded

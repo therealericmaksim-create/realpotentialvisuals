@@ -34,6 +34,25 @@ const STEP = 16;
 const MIN_RATIO = 1 / 3;
 const MAX_RATIO = 3;
 
+// The long edge is scaled into this band. A minimum matters for two
+// reasons: a small upload would otherwise ask for a tiny output the API
+// rejects outright (a fast 400 that looks like "the button did nothing"),
+// and a render the customer pays for should not be smaller than this
+// regardless of what they photographed it on.
+const MIN_LONG_EDGE = 1024;
+
+// Anything outside this is not a real photo dimension — it means the
+// header parse went wrong, and trusting it would produce a nonsense size
+// request. Falling back to a sane default beats failing the render.
+const PLAUSIBLE = { min: 64, max: 20000 };
+
+function dimensionsLookReal(d: { width: number; height: number } | null): boolean {
+  if (!d) return false;
+  const ok = (v: number) =>
+    Number.isFinite(v) && v >= PLAUSIBLE.min && v <= PLAUSIBLE.max;
+  return ok(d.width) && ok(d.height);
+}
+
 function supportsArbitrarySize(model: string): boolean {
   // Everything from gpt-image-2 onward. Matching on the "-1" generation
   // rather than allow-listing every future name, so a newer model works
@@ -65,7 +84,8 @@ export function chooseOutputSize(
   source: { width: number; height: number } | null,
   model: string = DEFAULT_IMAGE_MODEL
 ): string {
-  if (!source || source.width <= 0 || source.height <= 0) return "1536x1024";
+  if (!dimensionsLookReal(source)) return "1536x1024";
+  source = source as { width: number; height: number };
 
   if (!supportsArbitrarySize(model)) {
     const target = source.width / source.height;
@@ -89,7 +109,16 @@ export function chooseOutputSize(
   if (ratio > MAX_RATIO) width = height * MAX_RATIO;
   else if (ratio < MIN_RATIO) height = width / MIN_RATIO;
 
-  // Scale down to fit the maximum, preserving shape.
+  // Scale UP if the photo is small, so the output never drops below the
+  // minimum the API accepts (and never ships the customer a tiny render),
+  // then DOWN to fit the maximum. Both preserve the shape.
+  const longEdge = Math.max(width, height);
+  if (longEdge < MIN_LONG_EDGE) {
+    const up = MIN_LONG_EDGE / longEdge;
+    width *= up;
+    height *= up;
+  }
+
   const scale = Math.min(1, MAX_EDGE.width / width, MAX_EDGE.height / height);
   width *= scale;
   height *= scale;
@@ -133,7 +162,14 @@ export async function generateRenderImage(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`OpenAI image edit failed (${res.status}): ${text.slice(0, 500)}`);
+    // Include what we asked for, not just what came back: a rejection is
+    // almost always about the model name or the requested size, and
+    // without those the message can't be acted on.
+    throw new Error(
+      `Image model rejected the request (HTTP ${res.status}). ` +
+        `model=${model}, size=${size}, source=${dimensions ? `${dimensions.width}x${dimensions.height}` : "unreadable"}. ` +
+        `Response: ${text.slice(0, 400)}`
+    );
   }
 
   const data = (await res.json()) as { data?: { b64_json?: string }[] };
