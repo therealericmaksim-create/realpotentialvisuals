@@ -1,6 +1,21 @@
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import SiteHeader from "@/components/SiteHeader";
+import { resolvePricing } from "@/lib/pricingConfig";
 
-export default function Home() {
+// Pricing is admin-configurable (Settings -> System Variables) with no
+// deploy, so this page can't be statically prerendered — it has to read
+// current pricing at request time. force-dynamic makes that explicit
+// rather than relying on Next's own dynamic-usage detection.
+export const dynamic = "force-dynamic";
+
+function money(n: number): string {
+  return `$${n.toFixed(2)}`;
+}
+
+export default async function Home() {
+  const { env } = getCloudflareContext();
+  const pricing = await resolvePricing(env.DB);
+
   return (
     <>
       <SiteHeader />
@@ -255,7 +270,7 @@ export default function Home() {
               <div className="price-box">
                 <h3>Self-Directed</h3>
                 <div className="big-price">
-                  $29.99<span className="price-unit"> / render</span>
+                  {money(pricing.renderPrice.self_directed)}<span className="price-unit"> / render</span>
                 </div>
                 <p className="desc">
                   You pick the style yourself from our full catalog — fully
@@ -276,7 +291,7 @@ export default function Home() {
               <div className="price-box featured">
                 <h3>Curated</h3>
                 <div className="big-price">
-                  $44.99<span className="price-unit"> / render</span>
+                  {money(pricing.renderPrice.curated)}<span className="price-unit"> / render</span>
                 </div>
                 <p className="desc">
                   Our team picks the style for your specific home and
@@ -298,7 +313,7 @@ export default function Home() {
               <div className="price-box">
                 <h3>Premium</h3>
                 <div className="big-price">
-                  $59.99<span className="price-unit"> / render</span>
+                  {money(pricing.renderPrice.premium)}<span className="price-unit"> / render</span>
                 </div>
                 <p className="desc">
                   Describe exactly what you want — a specific era, an unusual
@@ -321,19 +336,19 @@ export default function Home() {
             <div className="extras-grid">
               <div className="extra-item">
                 <span className="lbl">Night View</span>
-                <span className="amt">$9.99</span>
+                <span className="amt">{money(pricing.extraPrice)}</span>
               </div>
               <div className="extra-item">
                 <span className="lbl">Seasonal Look</span>
-                <span className="amt">$9.99</span>
+                <span className="amt">{money(pricing.extraPrice)}</span>
               </div>
               <div className="extra-item">
                 <span className="lbl">Holiday Decor</span>
-                <span className="amt">$9.99</span>
+                <span className="amt">{money(pricing.extraPrice)}</span>
               </div>
               <div className="extra-item">
                 <span className="lbl">Structural vs. Cosmetic Breakdown</span>
-                <span className="amt">$19.99</span>
+                <span className="amt">{money(pricing.structuralBreakdownPrice)}</span>
               </div>
               <div className="extra-item">
                 <span className="lbl">
@@ -344,7 +359,7 @@ export default function Home() {
               </div>
               <div className="extra-item">
                 <span className="lbl">Add Your Logo</span>
-                <span className="amt">$29.99</span>
+                <span className="amt">{money(pricing.logoPrice)}</span>
               </div>
             </div>
           </div>

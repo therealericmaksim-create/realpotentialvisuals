@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getStripeClient } from "@/lib/stripe";
 import { getConfigValue } from "@/lib/systemConfig";
+import { resolvePricing } from "@/lib/pricingConfig";
 import {
   computeOrderLineItems,
   type OrderItemPricingRow,
@@ -39,7 +40,8 @@ export async function POST(req: NextRequest) {
     .bind(body.orderId)
     .all<OrderItemPricingRow>();
 
-  const lineItems = computeOrderLineItems(order, itemsResult.results ?? []);
+  const pricing = await resolvePricing(env.DB);
+  const lineItems = computeOrderLineItems(order, itemsResult.results ?? [], pricing);
   const totalCents = lineItems.reduce((sum, l) => sum + l.amountCents, 0);
 
   const origin = req.headers.get("origin") ?? new URL(req.url).origin;

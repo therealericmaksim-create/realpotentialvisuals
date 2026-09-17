@@ -14,6 +14,8 @@
 // undo it — would break, with no way back in except editing D1 directly
 // outside the app. They stay as Worker secrets only, never DB-overridable.
 
+import { RENDER_PRICE, EXTRA_PRICE, LOGO_PRICE, STRUCTURAL_BREAKDOWN_PRICE } from "./pricing";
+
 export const CONFIG_KEYS = [
   "OPENAI_API_KEY",
   "STRIPE_SECRET_KEY",
@@ -22,6 +24,12 @@ export const CONFIG_KEYS = [
   "RESEND_API_KEY",
   "GOOGLE_MAPS_API_KEY",
   "DAILY_INTAKE_CAP",
+  "PRICE_SELF_DIRECTED",
+  "PRICE_CURATED",
+  "PRICE_PREMIUM",
+  "PRICE_EXTRA",
+  "PRICE_STRUCTURAL_BREAKDOWN",
+  "PRICE_LOGO",
 ] as const;
 
 export type ConfigKey = (typeof CONFIG_KEYS)[number];
@@ -34,6 +42,12 @@ export const CONFIG_LABELS: Record<ConfigKey, string> = {
   RESEND_API_KEY: "Resend API Key",
   GOOGLE_MAPS_API_KEY: "Google Maps API Key",
   DAILY_INTAKE_CAP: "Daily Intake Cap",
+  PRICE_SELF_DIRECTED: "Self-Directed Render Price",
+  PRICE_CURATED: "Curated Render Price",
+  PRICE_PREMIUM: "Premium Render Price",
+  PRICE_EXTRA: "Extra (Night / Seasonal / Holiday) Price",
+  PRICE_STRUCTURAL_BREAKDOWN: "Structural vs. Cosmetic Breakdown Price",
+  PRICE_LOGO: "Add Logo Price",
 };
 
 export const CONFIG_SECRET: Record<ConfigKey, boolean> = {
@@ -44,6 +58,43 @@ export const CONFIG_SECRET: Record<ConfigKey, boolean> = {
   RESEND_API_KEY: true,
   GOOGLE_MAPS_API_KEY: false, // public by design, protected by HTTP-referrer restriction instead
   DAILY_INTAKE_CAP: false,
+  PRICE_SELF_DIRECTED: false,
+  PRICE_CURATED: false,
+  PRICE_PREMIUM: false,
+  PRICE_EXTRA: false,
+  PRICE_STRUCTURAL_BREAKDOWN: false,
+  PRICE_LOGO: false,
+};
+
+// Rendered as a numeric ($) input in the System Variables page instead
+// of a plain/masked text field.
+export const CONFIG_NUMERIC: Record<ConfigKey, boolean> = {
+  OPENAI_API_KEY: false,
+  STRIPE_SECRET_KEY: false,
+  STRIPE_PUBLISHABLE_KEY: false,
+  STRIPE_WEBHOOK_SECRET: false,
+  RESEND_API_KEY: false,
+  GOOGLE_MAPS_API_KEY: false,
+  DAILY_INTAKE_CAP: true,
+  PRICE_SELF_DIRECTED: true,
+  PRICE_CURATED: true,
+  PRICE_PREMIUM: true,
+  PRICE_EXTRA: true,
+  PRICE_STRUCTURAL_BREAKDOWN: true,
+  PRICE_LOGO: true,
+};
+
+// Fallback defaults for keys with NO Worker env var backing at all —
+// pricing has never been an env var, it's always lived as plain
+// TypeScript constants (lib/pricing.ts). Every other key's default comes
+// from its real env var/secret instead (see GET /api/admin/config).
+export const CONFIG_HARDCODED_DEFAULT: Partial<Record<ConfigKey, string>> = {
+  PRICE_SELF_DIRECTED: String(RENDER_PRICE.self_directed),
+  PRICE_CURATED: String(RENDER_PRICE.curated),
+  PRICE_PREMIUM: String(RENDER_PRICE.premium),
+  PRICE_EXTRA: String(EXTRA_PRICE),
+  PRICE_STRUCTURAL_BREAKDOWN: String(STRUCTURAL_BREAKDOWN_PRICE),
+  PRICE_LOGO: String(LOGO_PRICE),
 };
 
 export async function getConfigValue(

@@ -5,7 +5,8 @@
 // customer_email is already known at creation time.
 
 import { computeOrderTotalCents } from "./orderPricing";
-import { RENDER_PRICE, type RenderTier } from "./pricing";
+import { type RenderTier } from "./pricing";
+import { resolvePricing } from "./pricingConfig";
 
 export type RenderItemInput = {
   tier: RenderTier;
@@ -40,6 +41,7 @@ export async function createOrderWithItems(
   const orderId = crypto.randomUUID();
   const now = new Date().toISOString();
   const renderItems = params.renderItems ?? [];
+  const pricing = await resolvePricing(db);
 
   const totalCents = computeOrderTotalCents(
     { logo_key: params.logoSelected ? "pending-upload" : null },
@@ -50,7 +52,8 @@ export async function createOrderWithItems(
       seasonal: item.seasonal ? 1 : 0,
       holiday: item.holiday ? 1 : 0,
       breakdown: item.breakdown ? 1 : 0,
-    }))
+    })),
+    pricing
   );
 
   await db
@@ -96,7 +99,7 @@ export async function createOrderWithItems(
       styleId = lookup?.id ?? null;
     }
 
-    const unitPrice = RENDER_PRICE[item.tier];
+    const unitPrice = pricing.renderPrice[item.tier];
 
     await db
       .prepare(

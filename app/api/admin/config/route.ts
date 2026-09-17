@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
 import { hasRole } from "@/lib/staffAuth";
-import { CONFIG_KEYS, CONFIG_LABELS, CONFIG_SECRET, setConfigValue, clearConfigValue, type ConfigKey } from "@/lib/systemConfig";
+import {
+  CONFIG_KEYS,
+  CONFIG_LABELS,
+  CONFIG_SECRET,
+  CONFIG_NUMERIC,
+  CONFIG_HARDCODED_DEFAULT,
+  setConfigValue,
+  clearConfigValue,
+  type ConfigKey,
+} from "@/lib/systemConfig";
 
 // System Variables page — principal-only. Every value here already has a
 // working default (a Worker env var/secret); a row in the `config` table
@@ -32,11 +41,14 @@ export async function GET() {
 
   const variables = CONFIG_KEYS.map((key) => {
     const dbRow = dbRows.get(key);
-    const envDefault: string | undefined = env[key];
+    // Pricing keys (and any other future key with no env var backing)
+    // fall back to a hardcoded default instead of a Worker env var.
+    const envDefault: string | undefined = CONFIG_HARDCODED_DEFAULT[key] ?? (env as unknown as Record<string, string | undefined>)[key];
     return {
       key,
       label: CONFIG_LABELS[key],
       secret: CONFIG_SECRET[key],
+      numeric: CONFIG_NUMERIC[key],
       value: dbRow?.value ?? envDefault ?? "",
       source: dbRow ? ("db" as const) : envDefault ? ("env" as const) : ("unset" as const),
       updatedAt: dbRow?.updated_at ?? null,

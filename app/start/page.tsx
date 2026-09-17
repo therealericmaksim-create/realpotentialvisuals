@@ -7,22 +7,42 @@ import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { STYLE_FAMILIES } from "@/lib/styles";
 import { AI_DISCLOSURE_TEXT } from "@/lib/disclosure";
 import {
-  RENDER_PRICE,
+  RENDER_PRICE as DEFAULT_RENDER_PRICE,
   TIER_LABELS,
   TIER_DESCRIPTIONS,
-  LOGO_PRICE,
+  LOGO_PRICE as DEFAULT_LOGO_PRICE,
   PREMIUM_CHAR_LIMIT,
   HOUSE_PHOTO_MAX_MB,
   LOGO_MAX_MB,
   EXTRA_LABELS,
-  EXTRA_PRICE,
+  EXTRA_PRICE as DEFAULT_EXTRA_PRICE,
   SEASON_OPTIONS,
   HOLIDAY_OPTIONS,
   STRUCTURAL_BREAKDOWN_LABEL,
-  STRUCTURAL_BREAKDOWN_PRICE,
+  STRUCTURAL_BREAKDOWN_PRICE as DEFAULT_STRUCTURAL_BREAKDOWN_PRICE,
   type ExtraKey,
   type RenderTier,
 } from "@/lib/pricing";
+
+// Admin-configurable (Settings -> System Variables) with no deploy — the
+// imported constants above are only the fallback shown immediately on
+// load, swapped for the live values the moment /api/config/pricing
+// resolves (same pattern as AddressAutocomplete's maps-key fetch).
+// What actually gets CHARGED is independently re-resolved server-side at
+// order-creation/checkout time regardless of what this page displays.
+type PricingConfig = {
+  renderPrice: Record<RenderTier, number>;
+  extraPrice: number;
+  logoPrice: number;
+  structuralBreakdownPrice: number;
+};
+
+const DEFAULT_PRICING: PricingConfig = {
+  renderPrice: DEFAULT_RENDER_PRICE,
+  extraPrice: DEFAULT_EXTRA_PRICE,
+  logoPrice: DEFAULT_LOGO_PRICE,
+  structuralBreakdownPrice: DEFAULT_STRUCTURAL_BREAKDOWN_PRICE,
+};
 
 const EXTRA_KEYS: ExtraKey[] = ["night", "seasonal", "holiday"];
 const RENDER_TIERS: RenderTier[] = ["self_directed", "curated", "premium"];
@@ -166,6 +186,25 @@ function StartPageInner() {
     }
     window.addEventListener("pageshow", handlePageShow);
     return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+
+  const [pricing, setPricing] = useState<PricingConfig>(DEFAULT_PRICING);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/config/pricing")
+      .then((res) => res.json() as Promise<PricingConfig>)
+      .then((data) => {
+        if (!cancelled) setPricing(data);
+      })
+      .catch(() => {
+        // Fails open — the hardcoded defaults above still display and
+        // still work fine for calculating this page's own total; only
+        // the server-side checkout total is ever actually trusted.
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const [step, setStep] = useState<Step>("form");
@@ -350,30 +389,30 @@ function StartPageInner() {
         row.tier === "self_directed"
           ? row.styleName || `${tierLabel} render #${i + 1}`
           : `${tierLabel} render #${i + 1}`;
-      items.push({ label: name, amount: RENDER_PRICE[row.tier] });
+      items.push({ label: name, amount: pricing.renderPrice[row.tier] });
 
       for (const key of EXTRA_KEYS) {
         if (row.extras[key]) {
           items.push({
             label: `${EXTRA_LABELS[key]} — ${name}`,
-            amount: EXTRA_PRICE,
+            amount: pricing.extraPrice,
           });
         }
       }
       if (row.breakdown) {
         items.push({
           label: `${STRUCTURAL_BREAKDOWN_LABEL} — ${name}`,
-          amount: STRUCTURAL_BREAKDOWN_PRICE,
+          amount: pricing.structuralBreakdownPrice,
         });
       }
     });
 
     if (logo) {
-      items.push({ label: "Add Your Logo", amount: LOGO_PRICE });
+      items.push({ label: "Add Your Logo", amount: pricing.logoPrice });
     }
 
     return items;
-  }, [renderItems, logo]);
+  }, [renderItems, logo, pricing]);
 
   const total = lineItems.reduce((sum, i) => sum + i.amount, 0);
 
@@ -814,7 +853,7 @@ function StartPageInner() {
                 <div className="cfg-tier-head">
                   <h2>{TIER_LABELS[tier]}</h2>
                   <span className="cfg-tier-price">
-                    {money(RENDER_PRICE[tier])}
+                    {money(pricing.renderPrice[tier])}
                     <span className="cfg-tier-unit"> / render</span>
                   </span>
                 </div>
@@ -909,7 +948,7 @@ function StartPageInner() {
                                   <InfoBubble text="Applies to this render only" />
                                 </div>
                               </label>
-                              <div className="cfg-extra-price">{money(EXTRA_PRICE)}</div>
+                              <div className="cfg-extra-price">{money(pricing.extraPrice)}</div>
                             </div>
 
                             {key === "seasonal" && row.extras.seasonal && (
@@ -957,7 +996,7 @@ function StartPageInner() {
                               <InfoBubble text="An itemized list of what's structural vs. cosmetic for this render" />
                             </div>
                           </label>
-                          <div className="cfg-extra-price">{money(STRUCTURAL_BREAKDOWN_PRICE)}</div>
+                          <div className="cfg-extra-price">{money(pricing.structuralBreakdownPrice)}</div>
                         </div>
                       </>
                     )}
@@ -972,7 +1011,7 @@ function StartPageInner() {
                 >
                   {rows.length >= MAX_RENDERS_PER_TIER
                     ? `Maximum ${MAX_RENDERS_PER_TIER} reached`
-                    : `+ Add a ${TIER_LABELS[tier]} Render (${money(RENDER_PRICE[tier])})`}
+                    : `+ Add a ${TIER_LABELS[tier]} Render (${money(pricing.renderPrice[tier])})`}
                 </button>
               </div>
             );
@@ -996,7 +1035,7 @@ function StartPageInner() {
                     {logo ? "Choose a Different Logo" : "Click to Upload Your Logo"}
                   </div>
                   <div className="cfg-drop-hint">
-                    {money(LOGO_PRICE)} — PNG with transparent background
+                    {money(pricing.logoPrice)} — PNG with transparent background
                     recommended, max {LOGO_MAX_MB}MB
                   </div>
                 </label>

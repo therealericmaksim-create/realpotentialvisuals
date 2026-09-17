@@ -3,6 +3,42 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.16.0 — 2026-09-17
+
+- Pricing is now admin-configurable with no deploy. All six values
+  (Self-Directed / Curated / Premium render prices, the flat Extra
+  price, Structural vs. Cosmetic Breakdown price, Add Logo price)
+  joined System Variables as regular config keys — same DB-override-
+  with-fallback-default pattern as the API keys already there, just
+  with the fallback being the hardcoded constant in `lib/pricing.ts`
+  instead of a Worker env var. Numeric keys (including the pre-existing
+  Daily Intake Cap) now render as a proper `$`-stepped number input
+  instead of plain text.
+- New public endpoint `GET /api/config/pricing` (unauthenticated, same
+  pattern as the Maps key endpoint) serves the current effective
+  pricing. The homepage now reads it directly server-side (converted to
+  an async Server Component with `force-dynamic`, since pricing can
+  change without a rebuild) and `/start` fetches it client-side with the
+  hardcoded values as an immediate fallback — no more hardcoded price
+  strings anywhere customers see them.
+- Every place a price actually gets CHARGED or RECORDED — order creation
+  (`lib/orders.ts`), and Stripe Checkout session creation
+  (`/api/checkout`) — independently re-resolves current pricing
+  server-side; nothing client-displayed is ever trusted for what's
+  actually billed. `lib/orderPricing.ts`'s line-item functions now take
+  the resolved pricing as a parameter instead of importing the static
+  constants directly.
+- Also fixed: the admin Manual Order form had a few extras/breakdown/logo
+  prices hardcoded as bare numeric literals (`9.99`, `19.99`, `29.99`)
+  instead of referencing any constant at all — now resolves live pricing
+  the same way as everywhere else.
+- Verified end-to-end against production: overrode the Self-Directed
+  price via System Variables, confirmed it appeared correctly on the
+  homepage, on `/start`, in a newly created order's stored total, in its
+  `order_items.unit_price_cents`, and in the real Stripe Checkout
+  session's charged amount — then reverted the override and confirmed
+  everything fell back to the hardcoded default cleanly.
+
 ## v0.15.1 — 2026-09-17
 
 - Fixed "Awaiting Analysis" on the dashboard: it now simply counts orders

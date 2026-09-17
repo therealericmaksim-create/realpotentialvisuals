@@ -6,6 +6,9 @@ import {
   TIER_LABELS,
   TIER_DESCRIPTIONS,
   EXTRA_LABELS,
+  EXTRA_PRICE as DEFAULT_EXTRA_PRICE,
+  LOGO_PRICE as DEFAULT_LOGO_PRICE,
+  STRUCTURAL_BREAKDOWN_PRICE as DEFAULT_STRUCTURAL_BREAKDOWN_PRICE,
   SEASON_OPTIONS,
   HOLIDAY_OPTIONS,
   STRUCTURAL_BREAKDOWN_LABEL,
@@ -1186,6 +1189,7 @@ type ConfigVarRow = {
   key: string;
   label: string;
   secret: boolean;
+  numeric: boolean;
   value: string;
   source: "db" | "env" | "unset";
   updatedAt: string | null;
@@ -1288,7 +1292,8 @@ function SystemVariablesSection({ isPrincipal }: { isPrincipal: boolean }) {
                 <td style={{ minWidth: 320 }}>
                   <div style={{ display: "flex", gap: 6 }}>
                     <input
-                      type={row.secret && !revealed[row.key] ? "password" : "text"}
+                      type={row.numeric ? "number" : row.secret && !revealed[row.key] ? "password" : "text"}
+                      step={row.numeric ? "0.01" : undefined}
                       value={edited[row.key] ?? ""}
                       placeholder="(unset)"
                       onChange={(e) =>
@@ -1362,7 +1367,36 @@ function money(n: number) {
 // 0/1 AI photo check (staff already look at the photo while entering the
 // order — see /api/admin/photo-upload) and skips Stripe entirely: this
 // saves straight to a 'placed' order, ready for "Run Analysis".
+type PricingConfig = {
+  renderPrice: Record<RenderTier, number>;
+  extraPrice: number;
+  logoPrice: number;
+  structuralBreakdownPrice: number;
+};
+
+const DEFAULT_PRICING: PricingConfig = {
+  renderPrice: RENDER_PRICE,
+  extraPrice: DEFAULT_EXTRA_PRICE,
+  logoPrice: DEFAULT_LOGO_PRICE,
+  structuralBreakdownPrice: DEFAULT_STRUCTURAL_BREAKDOWN_PRICE,
+};
+
 function ManualOrderSection({ onCreated }: { onCreated: (orderId: string) => void }) {
+  const [pricing, setPricing] = useState<PricingConfig>(DEFAULT_PRICING);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/config/pricing")
+      .then((res) => res.json() as Promise<PricingConfig>)
+      .then((data) => {
+        if (!cancelled) setPricing(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [customerEmail, setCustomerEmail] = useState("");
   const [propertyAddress, setPropertyAddress] = useState("");
   const [hoaAnswer, setHoaAnswer] = useState("");
@@ -1427,13 +1461,16 @@ function ManualOrderSection({ onCreated }: { onCreated: (orderId: string) => voi
   }
 
   const total = renderItems.reduce((sum, item) => {
-    let itemTotal = RENDER_PRICE[item.tier];
+    let itemTotal = pricing.renderPrice[item.tier];
     if (item.extras.night || item.extras.seasonal || item.extras.holiday) {
-      itemTotal += (item.extras.night ? 9.99 : 0) + (item.extras.seasonal ? 9.99 : 0) + (item.extras.holiday ? 9.99 : 0);
+      itemTotal +=
+        (item.extras.night ? pricing.extraPrice : 0) +
+        (item.extras.seasonal ? pricing.extraPrice : 0) +
+        (item.extras.holiday ? pricing.extraPrice : 0);
     }
-    if (item.breakdown) itemTotal += 19.99;
+    if (item.breakdown) itemTotal += pricing.structuralBreakdownPrice;
     return sum + itemTotal;
-  }, 0) + (logoSelected ? 29.99 : 0);
+  }, 0) + (logoSelected ? pricing.logoPrice : 0);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -1546,7 +1583,7 @@ function ManualOrderSection({ onCreated }: { onCreated: (orderId: string) => voi
               checked={logoSelected}
               onChange={(e) => setLogoSelected(e.target.checked)}
             />
-            Customer provided a logo to add ({money(29.99)})
+            Customer provided a logo to add ({money(pricing.logoPrice)})
           </label>
         </div>
 
@@ -1555,7 +1592,7 @@ function ManualOrderSection({ onCreated }: { onCreated: (orderId: string) => voi
           return (
             <div className="section-block" key={tier}>
               <h3>
-                {TIER_LABELS[tier]} — {money(RENDER_PRICE[tier])} / render
+                {TIER_LABELS[tier]} — {money(pricing.renderPrice[tier])} / render
               </h3>
               <p className="note">{TIER_DESCRIPTIONS[tier]}</p>
 
@@ -1601,7 +1638,7 @@ function ManualOrderSection({ onCreated }: { onCreated: (orderId: string) => voi
                             updateRow(row.id, { extras: { ...row.extras, [key]: e.target.checked } })
                           }
                         />
-                        {EXTRA_LABELS[key]} ({money(9.99)})
+                        {EXTRA_LABELS[key]} ({money(pricing.extraPrice)})
                       </label>
                     ))}
                     <label className="role-checkbox">
@@ -1610,7 +1647,7 @@ function ManualOrderSection({ onCreated }: { onCreated: (orderId: string) => voi
                         checked={row.breakdown}
                         onChange={(e) => updateRow(row.id, { breakdown: e.target.checked })}
                       />
-                      {STRUCTURAL_BREAKDOWN_LABEL} ({money(19.99)})
+                      {STRUCTURAL_BREAKDOWN_LABEL} ({money(pricing.structuralBreakdownPrice)})
                     </label>
                   </div>
 

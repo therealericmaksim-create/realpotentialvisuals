@@ -10,16 +10,13 @@
 // branching.
 
 import {
-  RENDER_PRICE,
   TIER_LABELS,
   EXTRA_LABELS,
-  EXTRA_PRICE,
   STRUCTURAL_BREAKDOWN_LABEL,
-  STRUCTURAL_BREAKDOWN_PRICE,
-  LOGO_PRICE,
   type ExtraKey,
   type RenderTier,
 } from "./pricing";
+import type { ResolvedPricing } from "./pricingConfig";
 
 const EXTRA_KEYS: ExtraKey[] = ["night", "seasonal", "holiday"];
 
@@ -44,7 +41,8 @@ function toCents(amount: number): number {
 
 export function computeOrderLineItems(
   order: OrderPricingRow,
-  items: OrderItemPricingRow[]
+  items: OrderItemPricingRow[],
+  pricing: ResolvedPricing
 ): OrderLineItem[] {
   const lines: OrderLineItem[] = [];
 
@@ -53,7 +51,7 @@ export function computeOrderLineItems(
     const name = item.style_name?.trim() ? item.style_name : `render #${i + 1}`;
     const label = `${tierLabel} — ${name}`;
 
-    lines.push({ label, amountCents: toCents(RENDER_PRICE[item.tier]) });
+    lines.push({ label, amountCents: toCents(pricing.renderPrice[item.tier]) });
 
     const itemFlags: Record<ExtraKey, number> = {
       night: item.night,
@@ -64,20 +62,20 @@ export function computeOrderLineItems(
       if (itemFlags[key]) {
         lines.push({
           label: `${EXTRA_LABELS[key]} — ${label}`,
-          amountCents: toCents(EXTRA_PRICE),
+          amountCents: toCents(pricing.extraPrice),
         });
       }
     }
     if (item.breakdown) {
       lines.push({
         label: `${STRUCTURAL_BREAKDOWN_LABEL} — ${label}`,
-        amountCents: toCents(STRUCTURAL_BREAKDOWN_PRICE),
+        amountCents: toCents(pricing.structuralBreakdownPrice),
       });
     }
   });
 
   if (order.logo_key) {
-    lines.push({ label: "Add Your Logo", amountCents: toCents(LOGO_PRICE) });
+    lines.push({ label: "Add Your Logo", amountCents: toCents(pricing.logoPrice) });
   }
 
   return lines;
@@ -85,9 +83,10 @@ export function computeOrderLineItems(
 
 export function computeOrderTotalCents(
   order: OrderPricingRow,
-  items: OrderItemPricingRow[]
+  items: OrderItemPricingRow[],
+  pricing: ResolvedPricing
 ): number {
-  return computeOrderLineItems(order, items).reduce(
+  return computeOrderLineItems(order, items, pricing).reduce(
     (sum, line) => sum + line.amountCents,
     0
   );
