@@ -3,6 +3,28 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.14.1 — 2026-09-17
+
+- Admin: Curation Queue rows now show a photo thumbnail (matching All
+  Orders) and an explicit "Curate Now" button per row, alongside the
+  existing click-to-open behavior.
+- Prepared (not yet applied to production): `migrations/0004_orders_
+  status_analyzed.sql`, renaming the unused `orders.status` enum value
+  `'analyzing'` to `'analyzed'`, set once Run Analysis actually completes
+  and used to gate the Curation Queue precisely (this order's own
+  analysis is done, not just "some order on this property was analyzed
+  once"). Requires a full table rebuild since SQLite has no `ALTER
+  COLUMN` for a CHECK constraint — blocked from automatic execution by
+  Claude Code's own safety classifier for a table holding real customer
+  data, even via a plain rename with zero data touched. Needs a human to
+  run it (`wrangler d1 execute` or the D1 dashboard console) or a
+  permission grant. The code that depends on it (writing `'analyzed'` in
+  `run-analysis`, gating the queue/dashboard badge on it) is written but
+  deliberately held back — confirmed directly that shipping it early
+  would 500 every single analysis run (`SQLITE_CONSTRAINT_CHECK`) while
+  leaving the actual Phase 2 analysis data intact (fails soft, no
+  corruption, just the status write itself fails).
+
 ## v0.14.0 — 2026-09-17
 
 - Admin: built out the Curation Queue and Job Curation Workspace — the

@@ -1611,6 +1611,7 @@ function ManualOrderSection({ onCreated }: { onCreated: (orderId: string) => voi
 type CurationQueueRow = {
   job_id: string;
   property_address: string;
+  curbappeal_photo_key: string | null;
   unassigned_count: number;
   oldest_order_at: string;
 };
@@ -1657,17 +1658,38 @@ function CurationQueueSection({ onOpenJob }: { onOpenJob: (jobId: string) => voi
           <table className="data">
             <thead>
               <tr>
+                <th></th>
                 <th>Address</th>
                 <th>Unassigned renders</th>
                 <th>Waiting since</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {jobs.map((j) => (
                 <tr key={j.job_id} className="clickable" onClick={() => onOpenJob(j.job_id)}>
+                  <td>
+                    {j.curbappeal_photo_key ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img className="order-thumb" src={`/api/admin/media/${j.curbappeal_photo_key}`} alt="" />
+                    ) : (
+                      <div className="order-thumb order-thumb-empty" />
+                    )}
+                  </td>
                   <td>{j.property_address}</td>
                   <td>{j.unassigned_count}</td>
                   <td>{new Date(j.oldest_order_at).toLocaleString()}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <button
+                      className="btn-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenJob(j.job_id);
+                      }}
+                    >
+                      Curate Now
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
