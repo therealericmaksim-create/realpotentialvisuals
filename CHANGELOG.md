@@ -5,22 +5,12 @@ or restore the exact code at any version: `git checkout v0.1.0`.
 
 ## v0.20.0 — 2026-09-17
 
-- **Renamed the post-QC order status `in_progress` to `in_production`.**
-  Requires `migrations/0006`, which rebuilds the `orders` table: SQLite
-  cannot alter a CHECK constraint in place. orders is referenced by
-  order_items, payments and contest_entries, so the migration uses
-  `PRAGMA defer_foreign_keys` to hold those checks until commit, by which
-  point the rebuilt table holds identical ids. No row actually carried
-  `in_progress` at migration time, so this was a constraint change only.
-  **The migration must be applied before this code is deployed** — QC
-  approval is the only path that writes the status, and the old CHECK
-  would reject the new value.
 - **Built the Production Queue and Production workspace** (`GET
   /api/admin/production`, `GET /api/admin/production/[jobId]`, `POST
-  /api/admin/production/[jobId]/render`). The queue lists orders at
-  `in_production`; opening one gives the same evidence panel as the QC
-  workspace plus, per ordered render, the instruction and a **Render with
-  AI** button.
+  /api/admin/production/[jobId]/render`). The queue lists orders QC has
+  approved; opening one gives the same evidence panel as the QC workspace
+  plus, per ordered render, the instruction and a **Render with AI**
+  button.
 - **Rendering actually generates an image now.** `lib/renderGeneration.ts`
   calls OpenAI's image EDIT endpoint with the customer's own photo as the
   input image, not text-to-image: the promise is "your actual house,
@@ -39,9 +29,19 @@ or restore the exact code at any version: `git checkout v0.1.0`.
 - Extracted `lib/jobWorkspace.ts` — the QC and Production workspaces load
   identical property evidence, and each stage re-checks the previous one's
   work, which only means something if both see the same information.
-- Admin nav: **Production Queue** added (Production group, with a
-  dashboard badge and stat card); *Material Selections* and *Render
-  Iterations* removed.
+- Admin nav: **Production Queue** added (Production group, with a badge
+  and dashboard stat card); *Material Selections* and *Render Iterations*
+  removed.
+- **The post-QC status is now displayed as "In Production" everywhere**,
+  in the admin and on customer pages, via `orderStatusLabel()`. The stored
+  value stays `in_progress`. Renaming it to `in_production` was attempted
+  and abandoned: SQLite cannot alter a CHECK constraint in place, and the
+  orders-table rebuild that requires failed against D1 — its
+  `defer_foreign_keys` resets between statements, so dropping the
+  referenced `orders` table violated `order_items`/`payments`. D1 rolled
+  back cleanly with no data lost. Since no row had ever carried the value,
+  the rename bought nothing but risk. Admin screens that previously
+  printed raw status strings now go through the same label map.
 
 ## v0.19.0 — 2026-09-17
 

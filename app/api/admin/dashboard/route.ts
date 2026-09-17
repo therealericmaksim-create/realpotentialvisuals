@@ -62,7 +62,7 @@ export async function GET() {
       db
         // Orders QC has signed off on, now waiting for their images to be
         // generated in the Production Queue.
-        .prepare(`SELECT COUNT(*) as n FROM orders WHERE status = 'in_production'`)
+        .prepare(`SELECT COUNT(*) as n FROM orders WHERE status = 'in_progress'`)
         .first<{ n: number }>(),
       db
         .prepare(`SELECT COUNT(*) as n FROM custom_requests WHERE status = 'awaiting_quote'`)

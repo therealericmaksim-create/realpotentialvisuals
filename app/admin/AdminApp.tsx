@@ -15,6 +15,7 @@ import {
   type RenderTier,
 } from "@/lib/pricing";
 import { STYLE_FAMILIES } from "@/lib/styles";
+import { orderStatusLabel } from "@/lib/orderDisplay";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import "./admin.css";
 
@@ -536,7 +537,7 @@ type OrderListRow = {
 // — kept here so the filter never drifts from what the column actually allows.
 const ORDER_STATUSES = [
   "started", "verified", "queued", "placed", "analyzing", "in_curation",
-  "awaiting_selection", "in_production", "in_qc", "complete", "cancelled",
+  "awaiting_selection", "in_progress", "in_qc", "complete", "cancelled",
   "refunded", "error",
 ];
 
@@ -643,7 +644,7 @@ function OrdersListSection({
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">All statuses</option>
               {ORDER_STATUSES.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>{orderStatusLabel(s)}</option>
               ))}
             </select>
           </label>
@@ -682,7 +683,7 @@ function OrdersListSection({
                     )}
                   </td>
                   <td style={{ fontFamily: "monospace", fontSize: 12 }}>{o.id}</td>
-                  <td><span className="pill">{o.status}</span></td>
+                  <td><span className="pill">{orderStatusLabel(o.status)}</span></td>
                   <td>{o.property_address ?? "—"}</td>
                   <td>{o.customer_email ?? "—"}</td>
                   <td>{o.job_id ? "yes" : "no"}</td>
@@ -862,7 +863,7 @@ function OrderDetailSection({
       <div className="page-head">
         <div className="eyebrow" style={{ fontFamily: "monospace" }}>Order {order.id}</div>
         <h1>{order.property_address}</h1>
-        <p>{order.customer_email ?? "no email"} — status: {order.status} — ${total} — placed {new Date(order.created_at).toLocaleString()}</p>
+        <p>{order.customer_email ?? "no email"} — status: {orderStatusLabel(order.status)} — ${total} — placed {new Date(order.created_at).toLocaleString()}</p>
       </div>
 
       {order.curbappeal_photo_key && (
@@ -954,7 +955,7 @@ function OrderDetailSection({
             </button>
           )}
           {order.status === "in_qc" && <span className="pill">awaiting QC</span>}
-          {order.status === "in_production" && <span className="pill">in production</span>}
+          {order.status === "in_progress" && <span className="pill">in production</span>}
         </div>
       )}
 

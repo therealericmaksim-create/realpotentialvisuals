@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
 
-// The Production Queue: one row per job with an order at 'in_production',
+// The Production Queue: one row per job with an order at 'in_progress',
 // i.e. QC signed off on the curation and the render instructions, and the
 // images now need generating. Same status-keyed shape as the Curation and
 // QC queues.
@@ -34,7 +34,7 @@ export async function GET() {
      JOIN jobs j ON j.id = o.job_id
      JOIN properties p ON p.id = j.property_id
      JOIN order_items oi ON oi.order_id = o.id AND oi.tier IN ('curated','premium')
-     WHERE o.status = 'in_production'
+     WHERE o.status = 'in_progress'
      GROUP BY j.id
      ORDER BY oldest_order_at ASC`
   ).all<ProductionQueueRow>();
