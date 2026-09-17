@@ -3,6 +3,32 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.15.0 — 2026-09-17
+
+- Curation no longer requires analysis to have run. Fixed a real bug in
+  the Job Curation Workspace where the entire style-assignment section
+  was hidden whenever a job had no structure analysis yet, even though
+  assigning a style never actually depended on it — the picker already
+  falls back to the full 133-style catalog with no AI ranking involved.
+  The "no analysis yet" message is now informational, not a block.
+- Replaced the abandoned `'analyzed'` status-rename approach (see
+  v0.14.1 — required a blocked schema migration) with a much simpler
+  fix that needed no schema change at all: a new **"Push to Curator"**
+  button on the order detail page, visible whenever an order's status is
+  `placed` or `analyzing`. Clicking it sets `orders.status =
+  'in_curation'` — an explicit staff decision, and the actual (and only)
+  thing the Curation Queue now gates on. New endpoint: `POST
+  /api/admin/orders/[id]/push-to-curator`. This also means a job can be
+  pushed to curation with zero AI spend if a curator is confident enough
+  to skip analysis entirely.
+  `POST /api/admin/orders/[id]/run-analysis` now sets `orders.status =
+  'analyzing'` on completion (a label, not a gate) — reusing the enum
+  value that already existed rather than renaming it, so no schema
+  change was needed for this either.
+- Curation Queue and the dashboard's "Awaiting Curation" badge both now
+  key off `orders.status = 'in_curation'` instead of structure-profile
+  existence.
+
 ## v0.14.1 — 2026-09-17
 
 - Admin: Curation Queue rows now show a photo thumbnail (matching All

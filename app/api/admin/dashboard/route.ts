@@ -29,23 +29,20 @@ export async function GET() {
         .first<{ n: number }>(),
       db
         .prepare(
-          // Same definition as /api/admin/curation's own query (see that
-          // file's PENDING note re: switching this to o.status =
-          // 'analyzed' once migrations/0004_orders_status_analyzed.sql
-          // actually runs): a job needs curation when it has at least one
-          // 'curated'-tier render still unassigned (style_id IS NULL) on
-          // an analyzed job — self_directed and premium never enter this
-          // queue at all. Deliberately NOT keyed off the old `curations`
-          // table (that table modeled the pre-v0.10.0 fixed-package "12
-          // candidates, 3 included" bundle and was never updated for
-          // per-render pricing; it's dead/unused now, left in place
-          // rather than dropped).
+          // Same definition as /api/admin/curation's own query: a job
+          // needs curation when it has at least one 'curated'-tier render
+          // still unassigned (style_id IS NULL) on an order explicitly
+          // pushed to curation (status = 'in_curation') — self_directed
+          // and premium never enter this queue at all. Deliberately NOT
+          // keyed off the old `curations` table (that table modeled the
+          // pre-v0.10.0 fixed-package "12 candidates, 3 included" bundle
+          // and was never updated for per-render pricing; it's
+          // dead/unused now, left in place rather than dropped).
           `SELECT COUNT(DISTINCT j.id) as n
            FROM jobs j
            JOIN orders o ON o.job_id = j.id
            JOIN order_items oi ON oi.order_id = o.id
-           JOIN curbappeal_property_structure_analysis psa ON psa.property_id = j.property_id
-           WHERE oi.tier = 'curated' AND oi.style_id IS NULL`
+           WHERE oi.tier = 'curated' AND oi.style_id IS NULL AND o.status = 'in_curation'`
         )
         .first<{ n: number }>(),
       db

@@ -16,15 +16,13 @@ export async function POST(_req: Request, { params }: Params) {
   const { env } = getCloudflareContext();
   const result = await runPhase2Analysis(env, id);
 
-  // PENDING: once migrations/0004_orders_status_analyzed.sql actually
-  // runs against production, add
-  //   await env.DB.prepare(`UPDATE orders SET status = 'analyzed', updated_at = ? WHERE id = ?`)
-  //     .bind(new Date().toISOString(), id).run();
-  // here, marking this order past the analysis stage so the Curation
-  // Queue can gate on it directly. Not added yet — 'analyzed' isn't a
-  // valid value in the live orders.status CHECK constraint until that
-  // migration runs, so writing it now would 500 on every single
-  // analysis run (confirmed directly: SQLITE_CONSTRAINT_CHECK).
+  // A label, not a gate — curation doesn't require analysis to have run
+  // (see /api/admin/orders/[id]/push-to-curator for the actual queue
+  // trigger). This just marks the order as having been analyzed at
+  // least once, visible on the order list/detail.
+  await env.DB.prepare(`UPDATE orders SET status = 'analyzing', updated_at = ? WHERE id = ?`)
+    .bind(new Date().toISOString(), id)
+    .run();
 
   return NextResponse.json(result);
 }

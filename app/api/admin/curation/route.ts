@@ -3,20 +3,15 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
 
 // The Curation Queue: one row per job that has at least one 'curated'-tier
-// render still unassigned (order_items.style_id IS NULL) AND already has a
-// structure profile computed (Run Analysis has been done, so there's
-// actually something to curate against). Any signed-in staff member can
-// view this, same rule as run-analysis: it's operational queue
-// visibility, not a who-can-do-what permission.
-//
-// PENDING: once migrations/0004_orders_status_analyzed.sql actually runs
-// against production (blocked on manual execution — see that file), this
-// should switch to `o.status = 'analyzed'` instead of the structure-
-// profile join, so a job's eligibility is tied to ITS OWN order's
-// analysis run rather than "some order on this property was analyzed
-// once." Not made yet because run-analysis can't write that status value
-// until the migration lands — shipping the switch first would make this
-// queue permanently empty.
+// render still unassigned (order_items.style_id IS NULL) on an order an
+// admin explicitly pushed to curation (status = 'in_curation', set by
+// POST /api/admin/orders/[id]/push-to-curator). Deliberately NOT gated
+// on analysis having run — curation is a human picking a style for a
+// render slot, which doesn't require AI analysis first; that's why this
+// is an explicit staff action rather than automatic once analysis
+// completes or once a curated-tier item exists. Any signed-in staff
+// member can view this, same rule as run-analysis: it's operational
+// queue visibility, not a who-can-do-what permission.
 
 type QueueRow = {
   job_id: string;
@@ -42,8 +37,7 @@ export async function GET() {
      JOIN orders o ON o.id = oi.order_id
      JOIN jobs j ON j.id = o.job_id
      JOIN properties p ON p.id = j.property_id
-     JOIN curbappeal_property_structure_analysis psa ON psa.property_id = j.property_id
-     WHERE oi.tier = 'curated' AND oi.style_id IS NULL
+     WHERE oi.tier = 'curated' AND oi.style_id IS NULL AND o.status = 'in_curation'
      GROUP BY j.id
      ORDER BY oldest_order_at ASC`
   ).all<QueueRow>();

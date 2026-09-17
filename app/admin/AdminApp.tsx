@@ -670,6 +670,7 @@ function OrderDetailSection({
   const [data, setData] = useState<OrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [pushing, setPushing] = useState(false);
   const [showFullRegulatory, setShowFullRegulatory] = useState(false);
 
   const load = useCallback(() => {
@@ -701,6 +702,28 @@ function OrderDetailSection({
       onRan();
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function pushToCurator() {
+    setPushing(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/admin/orders/${orderId}/push-to-curator`, { method: "POST" });
+      const text = await r.text();
+      let parsed: { error?: string } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+      load();
+      onRan();
+    } catch (e) {
+      setError(`Failed to push to curator: ${(e as Error).message}`);
+    } finally {
+      setPushing(false);
     }
   }
 
@@ -784,9 +807,17 @@ function OrderDetailSection({
       )}
 
       {order.job_id && (
-        <button className="btn-primary" onClick={runAnalysis} disabled={running}>
-          {running ? "Running…" : analysis ? "Re-run Analysis" : "Run Analysis"}
-        </button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="btn-primary" onClick={runAnalysis} disabled={running}>
+            {running ? "Running…" : analysis ? "Re-run Analysis" : "Run Analysis"}
+          </button>
+          {(order.status === "placed" || order.status === "analyzing") && (
+            <button className="cfg-remove" onClick={pushToCurator} disabled={pushing}>
+              {pushing ? "Pushing…" : "Push to Curator"}
+            </button>
+          )}
+          {order.status === "in_curation" && <span className="pill">pushed to curator</span>}
+        </div>
       )}
 
       {analysis && (
@@ -1843,7 +1874,10 @@ function JobCurationWorkspaceSection({
       </div>
 
       {!analysis && (
-        <p className="error-text">No structure analysis yet — run analysis on this order before curating.</p>
+        <p className="note">
+          No analysis has been run on this order yet — you can still assign styles from the full catalog below, or
+          run analysis first (from the order&apos;s own page) for a ranked shortlist with reasoning.
+        </p>
       )}
 
       {analysis && (
@@ -1914,7 +1948,7 @@ function JobCurationWorkspaceSection({
         </div>
       )}
 
-      {analysis && unassigned.length > 0 && (
+      {unassigned.length > 0 && (
         <div className="section-block">
           <h3>Assign styles</h3>
           {unassigned.map((s, i) => (
