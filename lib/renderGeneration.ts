@@ -12,18 +12,38 @@
 
 import { readImageDimensions } from "./imageValidation";
 
-const IMAGE_MODEL = "gpt-image-1";
+export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
 
-// The only sizes the model emits. It cannot return arbitrary dimensions,
-// so an exact pixel match with the customer's photo is not achievable at
-// this layer — the best available behaviour is to pick the shape closest
-// to the source, which keeps the framing and crop honest. The first real
-// render hardcoded landscape and came back re-framed.
-const SUPPORTED_SIZES = [
+// gpt-image-2 and later accept an arbitrary WIDTHxHEIGHT, so the output
+// can match the shape of the customer's own photo. The constraints are
+// the API's: both dimensions divisible by 16, aspect ratio within 1:3 to
+// 3:1, nothing larger than 3840x2160.
+//
+// gpt-image-1 (and -1.5, -1-mini) could only emit 1024x1024, 1536x1024 or
+// 1024x1536 — hardcoding the landscape one is what re-framed a portrait
+// photo on the first real render. Those models still work here; they just
+// fall back to the nearest preset.
+const LEGACY_FIXED_SIZES = [
   { size: "1024x1024", width: 1024, height: 1024 },
   { size: "1536x1024", width: 1536, height: 1024 },
   { size: "1024x1536", width: 1024, height: 1536 },
 ] as const;
+
+const MAX_EDGE = { width: 3840, height: 2160 };
+const STEP = 16;
+const MIN_RATIO = 1 / 3;
+const MAX_RATIO = 3;
+
+function supportsArbitrarySize(model: string): boolean {
+  // Everything from gpt-image-2 onward. Matching on the "-1" generation
+  // rather than allow-listing every future name, so a newer model works
+  // without a code change.
+  return !/^gpt-image-1(\.\d+)?(-mini)?$/.test(model) && !/^dall-e/.test(model);
+}
+
+function roundToStep(value: number): number {
+  return Math.max(STEP, Math.round(value / STEP) * STEP);
+}
 
 export type GeneratedImage = {
   bytes: Uint8Array;
@@ -33,23 +53,48 @@ export type GeneratedImage = {
   requestedSize: string;
   sourceWidth: number | null;
   sourceHeight: number | null;
+  model: string;
 };
 
-// Closest by aspect ratio, so a tall photo never comes back cropped into a
-// wide frame (or the reverse).
-export function chooseOutputSize(source: { width: number; height: number } | null): string {
+// The output size for a given source photo and model. On a model that
+// takes arbitrary dimensions this lands within a few pixels of the
+// original and preserves its aspect ratio; on a fixed-size model it falls
+// back to the nearest-shaped preset so a tall photo is never forced into
+// a wide frame.
+export function chooseOutputSize(
+  source: { width: number; height: number } | null,
+  model: string = DEFAULT_IMAGE_MODEL
+): string {
   if (!source || source.width <= 0 || source.height <= 0) return "1536x1024";
-  const target = source.width / source.height;
-  let best: (typeof SUPPORTED_SIZES)[number] = SUPPORTED_SIZES[0];
-  let bestDelta = Infinity;
-  for (const candidate of SUPPORTED_SIZES) {
-    const delta = Math.abs(candidate.width / candidate.height - target);
-    if (delta < bestDelta) {
-      bestDelta = delta;
-      best = candidate;
+
+  if (!supportsArbitrarySize(model)) {
+    const target = source.width / source.height;
+    let best: (typeof LEGACY_FIXED_SIZES)[number] = LEGACY_FIXED_SIZES[0];
+    let bestDelta = Infinity;
+    for (const candidate of LEGACY_FIXED_SIZES) {
+      const delta = Math.abs(candidate.width / candidate.height - target);
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        best = candidate;
+      }
     }
+    return best.size;
   }
-  return best.size;
+
+  let { width, height } = source;
+
+  // Clamp the aspect ratio into the API's 1:3–3:1 window before scaling,
+  // so an extreme panorama is trimmed rather than rejected outright.
+  const ratio = width / height;
+  if (ratio > MAX_RATIO) width = height * MAX_RATIO;
+  else if (ratio < MIN_RATIO) height = width / MIN_RATIO;
+
+  // Scale down to fit the maximum, preserving shape.
+  const scale = Math.min(1, MAX_EDGE.width / width, MAX_EDGE.height / height);
+  width *= scale;
+  height *= scale;
+
+  return `${roundToStep(width)}x${roundToStep(height)}`;
 }
 
 function base64ToBytes(b64: string): Uint8Array {
@@ -62,14 +107,15 @@ function base64ToBytes(b64: string): Uint8Array {
 export async function generateRenderImage(
   apiKey: string,
   source: { bytes: ArrayBuffer; contentType: string },
-  prompt: string
+  prompt: string,
+  model: string = DEFAULT_IMAGE_MODEL
 ): Promise<GeneratedImage> {
   const sourceBytes = new Uint8Array(source.bytes);
   const dimensions = readImageDimensions(sourceBytes);
-  const size = chooseOutputSize(dimensions);
+  const size = chooseOutputSize(dimensions, model);
 
   const form = new FormData();
-  form.append("model", IMAGE_MODEL);
+  form.append("model", model);
   form.append("prompt", prompt);
   form.append("size", size);
   form.append("n", "1");
@@ -102,5 +148,6 @@ export async function generateRenderImage(
     requestedSize: size,
     sourceWidth: dimensions?.width ?? null,
     sourceHeight: dimensions?.height ?? null,
+    model,
   };
 }

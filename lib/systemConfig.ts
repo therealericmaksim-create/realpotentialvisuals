@@ -23,6 +23,7 @@ export const CONFIG_KEYS = [
   "STRIPE_WEBHOOK_SECRET",
   "RESEND_API_KEY",
   "GOOGLE_MAPS_API_KEY",
+  "RENDER_IMAGE_MODEL",
   "DAILY_INTAKE_CAP",
   "PRICE_SELF_DIRECTED",
   "PRICE_CURATED",
@@ -44,6 +45,7 @@ export const CONFIG_LABELS: Record<ConfigKey, string> = {
   STRIPE_WEBHOOK_SECRET: "Stripe Webhook Secret",
   RESEND_API_KEY: "Resend API Key",
   GOOGLE_MAPS_API_KEY: "Google Maps API Key",
+  RENDER_IMAGE_MODEL: "Render Image Model",
   DAILY_INTAKE_CAP: "Daily Intake Cap",
   PRICE_SELF_DIRECTED: "Self-Directed Render Price",
   PRICE_CURATED: "Curated Render Price",
@@ -63,6 +65,7 @@ export const CONFIG_SECRET: Record<ConfigKey, boolean> = {
   STRIPE_WEBHOOK_SECRET: true,
   RESEND_API_KEY: true,
   GOOGLE_MAPS_API_KEY: false, // public by design, protected by HTTP-referrer restriction instead
+  RENDER_IMAGE_MODEL: false, // a model name, not a credential
   DAILY_INTAKE_CAP: false,
   PRICE_SELF_DIRECTED: false,
   PRICE_CURATED: false,
@@ -84,6 +87,7 @@ export const CONFIG_NUMERIC: Record<ConfigKey, boolean> = {
   STRIPE_WEBHOOK_SECRET: false,
   RESEND_API_KEY: false,
   GOOGLE_MAPS_API_KEY: false,
+  RENDER_IMAGE_MODEL: false,
   DAILY_INTAKE_CAP: true,
   PRICE_SELF_DIRECTED: true,
   PRICE_CURATED: true,
@@ -101,6 +105,12 @@ export const CONFIG_NUMERIC: Record<ConfigKey, boolean> = {
 // TypeScript constants (lib/pricing.ts). Every other key's default comes
 // from its real env var/secret instead (see GET /api/admin/config).
 export const CONFIG_HARDCODED_DEFAULT: Partial<Record<ConfigKey, string>> = {
+  // Configurable because image-model churn is constant and the choice is
+  // a direct cost-per-render decision. gpt-image-2 and later accept an
+  // arbitrary WIDTHxHEIGHT, which is what lets a render come back the
+  // same shape as the customer's photo; gpt-image-1 could only emit three
+  // fixed sizes, which is what re-framed the first real render.
+  RENDER_IMAGE_MODEL: "gpt-image-2",
   PRICE_SELF_DIRECTED: String(RENDER_PRICE.self_directed),
   PRICE_CURATED: String(RENDER_PRICE.curated),
   PRICE_PREMIUM: String(RENDER_PRICE.premium),

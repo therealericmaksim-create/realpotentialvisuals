@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
 import { getConfigValue } from "@/lib/systemConfig";
-import { generateRenderImage } from "@/lib/renderGeneration";
+import { generateRenderImage, DEFAULT_IMAGE_MODEL } from "@/lib/renderGeneration";
 
 // Generates one render: sends the approved instruction and the customer's
 // own photo to the image model, stores the result in R2, and records a
@@ -72,6 +72,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     );
   }
 
+  const model = (await getConfigValue(env.DB, "RENDER_IMAGE_MODEL", DEFAULT_IMAGE_MODEL)) || DEFAULT_IMAGE_MODEL;
+
   let generated;
   try {
     generated = await generateRenderImage(
@@ -80,7 +82,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         bytes: await source.arrayBuffer(),
         contentType: source.httpMetadata?.contentType ?? "image/jpeg",
       },
-      body.prompt
+      body.prompt,
+      model
     );
   } catch (e) {
     // Surface the real upstream message — a quota, content-policy or size
@@ -132,6 +135,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         styleId: slot.style_id,
         iteration,
         storageKey,
+        model: generated.model,
         requestedSize: generated.requestedSize,
         sourceWidth: generated.sourceWidth,
         sourceHeight: generated.sourceHeight,

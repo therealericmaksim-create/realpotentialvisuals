@@ -5,6 +5,29 @@ or restore the exact code at any version: `git checkout v0.1.0`.
 
 ## v0.21.0 — 2026-09-17
 
+- **Render output now matches the source photo's shape and near-exact
+  size**, replacing the earlier "closest of three presets" compromise.
+  `gpt-image-2` and later accept an arbitrary `WIDTHxHEIGHT` (both
+  divisible by 16, aspect ratio within 1:3–3:1, max 3840x2160), so the
+  size is computed from the customer's own photo instead of chosen from a
+  fixed list. The real sample photo (1148x1530) now renders at 1152x1536 —
+  same aspect ratio, four pixels off — where before it was forced into
+  1536x1024 landscape. Extreme panoramas and very tall images clamp into
+  the allowed ratio window rather than being rejected.
+- The image model is a System Variable (`RENDER_IMAGE_MODEL`, default
+  `gpt-image-2`), since model churn is constant and the choice is a direct
+  cost-per-render decision. Older fixed-size models still work — they fall
+  back to the nearest-shaped preset rather than the hardcoded landscape.
+- **Orders list is now one row per render, not per order.** With stages on
+  order_items, an order-level row could only show a rolled-up status that
+  hid the real state. Renders on the same order are grouped, with the
+  order id, photo and delete control on the first row of each group,
+  computed against the filtered list so they survive filtering. Delete
+  remains order-level and is labelled "Delete order" — a per-render delete
+  removes something the customer paid for and is a separate feature. The
+  status filter now filters by render stage, and the "Ready for analysis?"
+  column is gone.
+
 - **Re-engineered the render prompt (template v3) after the first real
   render came back wrong** in four ways: the output dimensions changed,
   the driveway/fence/walkways were altered, the gutters and downspouts
