@@ -3,6 +3,24 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.22.2 — 2026-09-17
+
+- **Fixed: the orders list looked like it had lost data.** Making the list
+  one row per render, I showed the thumbnail, order id, address and
+  customer only on the first row of each order group. The intent was to
+  avoid repetition; the effect was that an order-s second render
+  (#8029BFFD-2) rendered as a row of blanks, which reads as a broken
+  record rather than a tidy one. Worse, filtering by stage could hide the
+  one row that carried those details. Every column now repeats on every
+  row, and the delete control appears on every row too (still order-scoped
+  and still labelled "Delete order") so a filtered view can never leave an
+  order with no way to act on it. Only the separator rule between orders
+  still depends on grouping.
+- Verified the order-to-render linkage is intact end to end: the Curation
+  and Production queue queries both still return the property address and
+  the uploaded photo key, and the three workspaces show the address and
+  photo. No data was lost by the per-render change.
+
 ## v0.22.1 — 2026-09-17
 
 - **Production now shows when an approved prompt is out of date.** The

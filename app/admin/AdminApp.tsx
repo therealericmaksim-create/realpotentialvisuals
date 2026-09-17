@@ -699,9 +699,11 @@ function OrdersListSection({
             </thead>
             <tbody>
               {filtered.map((r, i) => {
-                // Group start is computed against the FILTERED list, so the
-                // order id and delete control stay visible even when a
-                // filter hides the order's other renders.
+                // Only used for the separator rule between orders. Every
+                // column repeats on every row: blanking the address, photo
+                // and email on an order's second render made those rows
+                // look like broken records with lost data, and a filtered
+                // view could hide the one row that carried them.
                 const isGroupStart = i === 0 || filtered[i - 1].order_id !== r.order_id;
                 return (
                   <tr
@@ -710,21 +712,18 @@ function OrdersListSection({
                     onClick={() => onOpenOrder(r.order_id)}
                   >
                     <td>
-                      {isGroupStart &&
-                        (r.curbappeal_photo_key ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            className="order-thumb"
-                            src={`/api/admin/media/${r.curbappeal_photo_key}`}
-                            alt=""
-                          />
-                        ) : (
-                          <div className="order-thumb order-thumb-empty" />
-                        ))}
+                      {r.curbappeal_photo_key ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          className="order-thumb"
+                          src={`/api/admin/media/${r.curbappeal_photo_key}`}
+                          alt=""
+                        />
+                      ) : (
+                        <div className="order-thumb order-thumb-empty" />
+                      )}
                     </td>
-                    <td style={{ fontFamily: "monospace", fontSize: 12 }}>
-                      {isGroupStart ? r.order_id : ""}
-                    </td>
+                    <td style={{ fontFamily: "monospace", fontSize: 12 }}>{r.order_id}</td>
                     <td>
                       {r.item_id && (
                         <div className="render-ref">{renderLabel(r.order_id, r.render_no)}</div>
@@ -739,23 +738,24 @@ function OrdersListSection({
                     <td>
                       {r.stage ? <span className="pill">{stageLabel(r.stage)}</span> : <span className="note">—</span>}
                     </td>
-                    <td>{isGroupStart ? r.property_address ?? "—" : ""}</td>
-                    <td>{isGroupStart ? r.customer_email ?? "—" : ""}</td>
+                    <td>{r.property_address ?? "—"}</td>
+                    <td>{r.customer_email ?? "—"}</td>
                     {isPrincipal && (
                       <td style={{ whiteSpace: "nowrap" }}>
-                        {isGroupStart && (
-                          <button
-                            className="stat-link"
-                            style={{ color: "var(--leg)" }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteOrder(r);
-                            }}
-                            disabled={deletingId === r.order_id}
-                          >
-                            {deletingId === r.order_id ? "Deleting…" : "Delete order"}
-                          </button>
-                        )}
+                        {/* On every row, not just the first: a filtered view
+                            could otherwise leave an order with no way to
+                            delete it. Still order-scoped, and says so. */}
+                        <button
+                          className="stat-link"
+                          style={{ color: "var(--leg)" }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteOrder(r);
+                          }}
+                          disabled={deletingId === r.order_id}
+                        >
+                          {deletingId === r.order_id ? "Deleting…" : "Delete order"}
+                        </button>
                       </td>
                     )}
                   </tr>
