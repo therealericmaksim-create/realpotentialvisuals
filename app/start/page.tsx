@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { STYLE_FAMILIES } from "@/lib/styles";
@@ -144,7 +144,29 @@ export default function StartPage() {
 }
 
 function StartPageInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Privacy: the order number shown on the post-payment screen must never
+  // survive a reload or a back/forward navigation — it's real customer
+  // order data sitting in the URL and in this component's state. A plain
+  // reload of ?checkout=success is defeated by stripping those params from
+  // the URL the moment they're consumed (below). A back/forward navigation
+  // that restores this exact page from the browser's bfcache is a separate
+  // problem — no URL or state change happens at all, the browser just
+  // repaints the frozen page — so that's handled here by forcing a hard
+  // reload on any bfcache restore, which lands on whatever the (by then
+  // query-param-free) URL actually is: the blank form, same as a first
+  // visit.
+  useEffect(() => {
+    function handlePageShow(e: PageTransitionEvent) {
+      if (e.persisted) {
+        window.location.reload();
+      }
+    }
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
 
   const [step, setStep] = useState<Step>("form");
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -495,6 +517,14 @@ function StartPageInner() {
 
     setOrderId(orderParam);
 
+    // Consumed — scrub the order id/session id out of the URL immediately
+    // so neither a plain reload nor a later back/forward navigation lands
+    // on an address bar that still carries this order's identifying
+    // params. replace() (not push()) rewrites this history entry in
+    // place rather than adding a new one, so "back" from here can't step
+    // onto the sensitive URL either.
+    router.replace("/start", { scroll: false });
+
     if (checkout === "success" && sessionId) {
       setStep("payment-success");
       setConfirmingPayment(true);
@@ -508,6 +538,7 @@ function StartPageInner() {
     } else if (checkout === "cancelled") {
       setStep("payment-cancelled");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   if (step === "disclosure") {

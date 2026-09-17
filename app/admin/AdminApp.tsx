@@ -415,6 +415,7 @@ type OrderListRow = {
   customer_email: string | null;
   job_id: string | null;
   created_at: string;
+  curbappeal_photo_key: string | null;
 };
 
 function OrdersListSection({
@@ -520,6 +521,7 @@ function OrdersListSection({
           <table className="data">
             <thead>
               <tr>
+                <th></th>
                 <th>Order</th>
                 <th>Status</th>
                 <th>Address</th>
@@ -531,6 +533,18 @@ function OrdersListSection({
             <tbody>
               {filtered.map((o) => (
                 <tr key={o.id} className="clickable" onClick={() => onOpenOrder(o.id)}>
+                  <td>
+                    {o.curbappeal_photo_key ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        className="order-thumb"
+                        src={`/api/admin/media/${o.curbappeal_photo_key}`}
+                        alt=""
+                      />
+                    ) : (
+                      <div className="order-thumb order-thumb-empty" />
+                    )}
+                  </td>
                   <td style={{ fontFamily: "monospace", fontSize: 12 }}>{o.id}</td>
                   <td><span className="pill">{o.status}</span></td>
                   <td>{o.property_address ?? "—"}</td>
@@ -598,6 +612,7 @@ type OrderDetail = {
     secondary_name: string | null;
   } | null;
   topMatches: { name: string; combined_score_pct: number; fit_tier: string }[];
+  curationRanks: { rank: number; style_name: string; reasoning: string }[];
   regulatory: { zoning_district: string | null; historic_overlay: number | null; flood_zone: string | null; summary: string } | null;
   neighborhood: { style_read: string; homes_visible: number; street_view_key: string | null } | null;
 };
@@ -651,7 +666,7 @@ function OrderDetailSection({
   if (error) return <p className="error-text">{error}</p>;
   if (!data) return <p className="loading">Loading…</p>;
 
-  const { order, renderItems, analysis, consensus, topMatches, regulatory, neighborhood } = data;
+  const { order, renderItems, analysis, consensus, topMatches, curationRanks, regulatory, neighborhood } = data;
   const total = (order.total_amount_cents / 100).toFixed(2);
 
   return (
@@ -749,30 +764,6 @@ function OrderDetailSection({
             </>
           )}
 
-          {topMatches.length > 0 && (
-            <>
-              <h3 style={{ marginTop: 16 }}>Top matches</h3>
-              {topMatches.map((m, i) => (
-                <div key={i} className="empty-row">{m.name} — {m.combined_score_pct}% ({m.fit_tier})</div>
-              ))}
-            </>
-          )}
-
-          {neighborhood && (
-            <>
-              <h3 style={{ marginTop: 16 }}>Neighborhood read</h3>
-              <p className="note">{neighborhood.style_read}</p>
-              {neighborhood.street_view_key && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  className="detail-photo"
-                  src={`/api/admin/media/${neighborhood.street_view_key}`}
-                  alt="Street View of the surrounding block"
-                />
-              )}
-            </>
-          )}
-
           {regulatory && (
             <>
               <h3 style={{ marginTop: 16 }}>Regulatory</h3>
@@ -791,6 +782,50 @@ function OrderDetailSection({
                 <p className="note" style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>
                   {regulatory.summary}
                 </p>
+              )}
+            </>
+          )}
+
+          {neighborhood && (
+            <>
+              <h3 style={{ marginTop: 16 }}>Neighborhood read</h3>
+              <p className="note">{neighborhood.style_read}</p>
+              {neighborhood.street_view_key && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  className="detail-photo"
+                  src={`/api/admin/media/${neighborhood.street_view_key}`}
+                  alt="Street View of the surrounding block"
+                />
+              )}
+            </>
+          )}
+
+          {topMatches.length > 0 && (
+            <>
+              <h3 style={{ marginTop: 16 }}>Top matches</h3>
+              {curationRanks.length > 0 ? (
+                <>
+                  <p className="note">
+                    AI-ranked starting point for curation — algorithm score/tier shown alongside each pick.
+                  </p>
+                  {curationRanks.map((r) => {
+                    const m = topMatches.find((t) => t.name === r.style_name);
+                    return (
+                      <div key={r.rank} className="empty-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 2 }}>
+                        <strong>
+                          {r.rank}. {r.style_name}
+                          {m && ` — ${m.combined_score_pct}% (${m.fit_tier})`}
+                        </strong>
+                        <span className="note">{r.reasoning}</span>
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                topMatches.map((m, i) => (
+                  <div key={i} className="empty-row">{m.name} — {m.combined_score_pct}% ({m.fit_tier})</div>
+                ))
               )}
             </>
           )}

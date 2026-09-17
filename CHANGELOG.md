@@ -3,6 +3,39 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.13.0 — 2026-09-17
+
+- Admin: All Orders now shows a 44px thumbnail of the uploaded property
+  photo next to every row (`/api/admin/media/[...key]` passthrough,
+  already used elsewhere for full-size photos).
+- Fixed a real privacy issue on `/start`: the post-payment "You're All
+  Set!" screen (which shows the real order number) could be re-triggered
+  by reloading the page or hitting the browser's back/forward button,
+  since it was driven entirely by `?checkout=success&order=...&session_id=...`
+  staying in the URL. Fixed two ways — the URL is now scrubbed
+  (`router.replace`) the instant those params are consumed, so a plain
+  reload or a `back` navigation can no longer land on an address bar that
+  still carries them; and a `pageshow` listener forces a hard reload on
+  any bfcache restore (a back/forward navigation the browser serves from
+  memory with no URL or state change at all), which lands on the by-then
+  clean URL — the blank form, same as a first visit.
+- Phase 2 analysis: added a new curator-assist step (19) for curated-tier
+  orders. Given the neighborhood-read description and the algorithm's own
+  top 8 style candidates (the same set already shown as "Top matches"),
+  an AI call re-ranks its top 6 with one sentence of reasoning each —
+  mirroring a manual ChatGPT workflow the business was already doing by
+  hand, so the curator has a real starting point instead of reading raw
+  scores cold. New table `curbappeal_structure_profile_curation_ranks`
+  (`migrations/0003_curation_ranks.sql`). This is purely advisory — it
+  never feeds back into the existing 2-voter blend/consensus (steps
+  18/20). Verified end-to-end against a real production photo: the AI
+  correctly dropped 2 of the 8 raw candidates and re-ordered by genuine
+  contextual fit rather than echoing the algorithm's own score order.
+- Admin order detail: reordered the analysis sections to Structure
+  (with Consensus), Regulatory, Neighborhood read, Top matches (now
+  showing the AI curation ranking + reasoning when available, falling
+  back to the plain algorithm list otherwise).
+
 ## v0.12.0 — 2026-09-16
 
 - System Variables: every API key and operational knob (`OPENAI_API_KEY`,

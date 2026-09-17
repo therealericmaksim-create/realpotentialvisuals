@@ -13,6 +13,7 @@ import { fetchStreetViewImage, readNeighborhood } from "./neighborhoodRead";
 import { lookupRegulatory } from "./regulatoryLookup";
 import { scoreStyleFeasibility } from "./feasibility";
 import { castAiVote } from "./aiVote";
+import { rankCurationCandidates, type CurationCandidate } from "./curationRanking";
 import {
   computeMatch,
   computeDesignElementScore,
@@ -213,6 +214,11 @@ export async function runPhase2Analysis(
   }
 
   // --- Step 11: neighborhood read ---
+  // Captured outside the try block so step 19 (curation ranking, below)
+  // has real neighborhood context to reason over when Street View
+  // succeeded, and a sensible fallback built from the structure profile
+  // itself when it didn't.
+  let neighborhoodContext: string | null = null;
   if (mapsKey) {
     try {
       const streetViewBytes = await fetchStreetViewImage(mapsKey, order.property_address);
@@ -222,6 +228,7 @@ export async function runPhase2Analysis(
         streetViewBytes
       );
       logs.push(neighborhoodLog);
+      neighborhoodContext = neighborhood.style_read;
       await env.DB.prepare(
         `INSERT INTO curbappeal_property_neighborhood_reads (id, property_id, street_view_key, style_read, homes_visible, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`
@@ -232,6 +239,12 @@ export async function runPhase2Analysis(
       // Street View can fail for addresses with no coverage -- non-fatal,
       // the rest of the pipeline doesn't depend on this step.
     }
+  }
+  if (!neighborhoodContext) {
+    neighborhoodContext =
+      `No neighborhood street view is available for this property. The home itself is a ` +
+      `${structure.house_type}, ${structure.storey_count}-storey, ${structure.roof_form} roof ` +
+      `(${structure.roof_pitch_bucket} pitch), ${structure.massing_envelope} massing.`;
   }
 
   // --- Step 12: regulatory lookup ---
@@ -463,6 +476,40 @@ export async function runPhase2Analysis(
       secondaryStyleName: consensus.secondaryStyleId ? (styleNameById.get(consensus.secondaryStyleId) ?? null) : null,
       classificationStatus: consensus.classificationStatus,
     };
+
+    // --- Step 19: AI curation ranking (curator-assist, not part of the
+    // blend/consensus above) --- same top 8 algorithm candidates already
+    // shown to staff as "Top matches", re-ranked to a top 6 with one
+    // sentence of reasoning each, given the neighborhood context. Purely
+    // advisory — never read back into scoring.
+    const styleIdByCandidateName = new Map((styleRows.results ?? []).map((s) => [s.name, s.id]));
+    const topAlgoCandidates: CurationCandidate[] = [...algoRows]
+      .sort((a, b) => b.combinedScorePct - a.combinedScorePct)
+      .slice(0, 8)
+      .map((r) => ({
+        styleName: styleNameById.get(r.styleId) ?? r.styleId,
+        combinedScorePct: r.combinedScorePct,
+        fitTier: deriveFitTier(r.combinedScorePct),
+      }));
+
+    const { result: rankings, log: rankingLog } = await rankCurationCandidates(
+      openaiKey,
+      neighborhoodContext,
+      topAlgoCandidates
+    );
+    logs.push(rankingLog);
+
+    for (let i = 0; i < rankings.length; i++) {
+      const r = rankings[i];
+      const styleId = styleIdByCandidateName.get(r.styleName) ?? null;
+      await env.DB.prepare(
+        `INSERT INTO curbappeal_structure_profile_curation_ranks (id, structure_profile_id, rank, style_id, style_name, reasoning, computed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(structure_profile_id, rank) DO UPDATE SET style_id = excluded.style_id, style_name = excluded.style_name, reasoning = excluded.reasoning, computed_at = excluded.computed_at`
+      )
+        .bind(crypto.randomUUID(), structureProfileId, i + 1, styleId, r.styleName, r.reasoning, now)
+        .run();
+    }
   }
 
   return {

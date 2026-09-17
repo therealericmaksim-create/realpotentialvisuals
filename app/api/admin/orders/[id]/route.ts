@@ -97,6 +97,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
         .all<{ name: string; combined_score_pct: number; fit_tier: string }>()
     : null;
 
+  const curationRanks = analysis
+    ? await env.DB.prepare(
+        `SELECT rank, style_name, reasoning FROM curbappeal_structure_profile_curation_ranks
+         WHERE structure_profile_id = ? ORDER BY rank ASC`
+      )
+        .bind(analysis.structure_profile_id)
+        .all<{ rank: number; style_name: string; reasoning: string }>()
+    : null;
+
   const regulatory = order.property_id
     ? await env.DB.prepare(
         `SELECT zoning_district, historic_overlay, flood_zone, summary FROM curbappeal_property_regulatory_lookups
@@ -121,6 +130,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     analysis,
     consensus,
     topMatches: topMatches?.results ?? [],
+    curationRanks: curationRanks?.results ?? [],
     regulatory,
     neighborhood,
   });
