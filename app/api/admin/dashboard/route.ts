@@ -46,7 +46,7 @@ export async function GET() {
            FROM jobs j
            JOIN orders o ON o.job_id = j.id
            JOIN order_items oi ON oi.order_id = o.id
-           WHERE oi.stage = 'awaiting_curation'`
+           WHERE oi.stage = 'in_curation'`
         )
         .first<{ n: number }>(),
       db
@@ -58,7 +58,7 @@ export async function GET() {
         // real QC work waited, the same way "Awaiting Curation" once
         // counted a dead table.
         .prepare(`SELECT COUNT(DISTINCT o.job_id) as n FROM order_items oi
-                  JOIN orders o ON o.id = oi.order_id WHERE oi.stage = 'awaiting_qc'`)
+                  JOIN orders o ON o.id = oi.order_id WHERE oi.stage = 'in_qc'`)
         .first<{ n: number }>(),
       db
         // Orders QC has signed off on, now waiting for their images to be

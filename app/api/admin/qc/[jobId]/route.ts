@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { jobId } = await params;
   const { env } = getCloudflareContext();
 
-  const ws = await loadJobWorkspace(env.DB, jobId, ["awaiting_qc"]);
+  const ws = await loadJobWorkspace(env.DB, jobId, ["in_qc"]);
   if (!ws) return NextResponse.json({ error: "job not found" }, { status: 404 });
 
   const prompts = await buildRenderPrompts(
@@ -94,13 +94,13 @@ export async function POST(req: NextRequest, { params }: Params) {
   const handled: string[] = [];
 
   for (const itemId of ids) {
-    // Scoped to this job AND to the awaiting_qc stage, so a stale page or
+    // Scoped to this job AND to the in_qc stage, so a stale page or
     // a tampered id can't decide a render that isn't actually under
     // review — including one a colleague just decided.
     const slot = await env.DB.prepare(
       `SELECT oi.id, oi.style_id, oi.style_name
        FROM order_items oi JOIN orders o ON o.id = oi.order_id
-       WHERE oi.id = ? AND o.job_id = ? AND oi.stage = 'awaiting_qc'`
+       WHERE oi.id = ? AND o.job_id = ? AND oi.stage = 'in_qc'`
     )
       .bind(itemId, jobId)
       .first<{ id: string; style_id: string | null; style_name: string }>();
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       // curator can see what was turned down rather than guessing.
       await env.DB.prepare(
         `UPDATE order_items
-         SET stage = 'awaiting_curation',
+         SET stage = 'in_curation',
              style_id = NULL,
              style_name = '',
              qc_denied_reason = ?,
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   if (handled.length === 0) {
     return NextResponse.json(
-      { error: "None of those renders are awaiting QC — the page may be out of date." },
+      { error: "None of those renders are in QC — the page may be out of date." },
       { status: 400 }
     );
   }

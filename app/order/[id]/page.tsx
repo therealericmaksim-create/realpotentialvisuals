@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import { orderNumber, orderStatusLabel } from "@/lib/orderDisplay";
+import { customerStageLabel } from "@/lib/orderStage";
 
 // One order's detail for the customer who placed it. Ownership is enforced
 // server-side — an id belonging to someone else 404s exactly like one that
@@ -28,6 +29,8 @@ type OrderDetail = {
     id: string;
     tier: string;
     tier_label: string;
+    stage: string;
+    style_id: string | null;
     style_name: string;
     custom_text: string | null;
     night: number;
@@ -38,7 +41,13 @@ type OrderDetail = {
     breakdown: number;
     unit_price_cents: number;
   }[];
-  renders: { id: string; delivered_key: string | null; storage_key: string | null; style_name: string }[];
+  renders: {
+    id: string;
+    style_id: string | null;
+    delivered_key: string | null;
+    storage_key: string | null;
+    style_name: string;
+  }[];
 };
 
 function itemExtras(i: OrderDetail["items"][number]): string {
@@ -123,6 +132,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     );
   }
 
+  const readyCount = data ? data.items.filter((i) => i.stage === "complete").length : 0;
+
   return (
     <>
       <SiteHeader />
@@ -158,44 +169,49 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 <p style={{ color: "var(--gray)" }}>No photo on file for this order.</p>
               )}
 
-              <h2 className="order-section-head">Your Renders</h2>
-              {data.renders.length === 0 ? (
-                <p style={{ color: "var(--gray)" }}>
-                  {data.order.status === "complete"
-                    ? "Your renders aren't showing here yet — please contact us and we'll sort it out."
-                    : "Your renders aren't ready yet. They'll appear here as soon as they're finished, and we'll email you when they are."}
-                </p>
-              ) : (
-                <div className="order-render-grid">
-                  {data.renders.map((r) => (
-                    <figure key={r.id} className="order-render">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`/api/customer/media/${r.delivered_key ?? r.storage_key}`}
-                        alt={`${r.style_name} visualization of your property`}
-                      />
-                      <figcaption>{r.style_name}</figcaption>
-                    </figure>
-                  ))}
-                </div>
-              )}
-
-              <h2 className="order-section-head">What You Ordered</h2>
-              <div className="order-items">
-                {data.items.map((i) => (
-                  <div key={i.id} className="order-item">
-                    <div>
-                      <div className="order-item-tier">{i.tier_label}</div>
-                      <div className="order-item-style">
-                        {i.tier === "premium"
-                          ? i.custom_text || "Custom request"
-                          : i.style_name || "Style being selected by our curator"}
+              <h2 className="order-section-head">
+                Your Renders{" "}
+                <span style={{ color: "var(--gray)", fontSize: 14, fontWeight: 400 }}>
+                  ({readyCount} of {data.items.length} ready)
+                </span>
+              </h2>
+              {/* One card per render ordered, each with its own state.
+                  Renders finish independently, so a part-delivered order
+                  shows the finished pictures and says plainly what is
+                  still being worked on. */}
+              <div className="order-render-list">
+                {data.items.map((i) => {
+                  const image = data.renders.find(
+                    (r) => i.style_id && r.style_id === i.style_id
+                  );
+                  const title =
+                    i.style_name ||
+                    (i.tier === "premium" ? i.custom_text || "Your custom request" : "Style being chosen");
+                  return (
+                    <div key={i.id} className="order-render-card">
+                      {image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={`/api/customer/media/${image.delivered_key ?? image.storage_key}`}
+                          alt={`${title} visualization of your property`}
+                        />
+                      ) : (
+                        <div className="order-render-pending">
+                          <span>{customerStageLabel(i.stage)}</span>
+                        </div>
+                      )}
+                      <div className="order-render-body">
+                        <div className="order-item-tier">{i.tier_label}</div>
+                        <div className="order-item-style">{title}</div>
+                        <div className="order-item-extras">{itemExtras(i)}</div>
+                        <div className="order-render-state">
+                          {image ? "Ready" : customerStageLabel(i.stage)}
+                        </div>
                       </div>
-                      <div className="order-item-extras">{itemExtras(i)}</div>
+                      <div className="order-item-price">${(i.unit_price_cents / 100).toFixed(2)}</div>
                     </div>
-                    <div className="order-item-price">${(i.unit_price_cents / 100).toFixed(2)}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <h2 className="order-section-head">Property Details</h2>

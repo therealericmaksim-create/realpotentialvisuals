@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
 
 // The Curation Queue: one row per job with at least one render at
-// stage 'awaiting_curation'. Keyed off the RENDER's stage, not the
+// stage 'in_curation'. Keyed off the RENDER's stage, not the
 // order's status — renders move through the pipeline independently, so an
 // order can have one render back in curation while another is already
 // rendering.
@@ -43,7 +43,7 @@ export async function GET() {
      JOIN orders o ON o.id = oi.order_id
      JOIN jobs j ON j.id = o.job_id
      JOIN properties p ON p.id = j.property_id
-     WHERE oi.stage = 'awaiting_curation'
+     WHERE oi.stage = 'in_curation'
      GROUP BY j.id
      ORDER BY oldest_order_at ASC`
   ).all<QueueRow>();

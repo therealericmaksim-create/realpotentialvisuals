@@ -7,6 +7,14 @@ export function orderNumber(id: string): string {
   return `#${id.slice(0, 8).toUpperCase()}`;
 }
 
+// How staff refer to one render: the order it belongs to, then its
+// position within that order — e.g. #E012622F-2. Every admin screen uses
+// this, so a render can be named out loud or pasted into a message
+// without anyone having to look up a UUID.
+export function renderLabel(orderId: string, renderNo: number | null): string {
+  return renderNo ? `${orderNumber(orderId)}-${renderNo}` : orderNumber(orderId);
+}
+
 // Internal status values are workflow states, not things to show anyone
 // as-is ('in_qc' means nothing to a customer). These are the display
 // translations, used by both the customer pages and the admin.

@@ -3,6 +3,44 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.22.0 — 2026-09-17
+
+**Requires `migrations/0006_order_item_stage.sql` before deploying.** Three
+`ALTER TABLE ADD COLUMN`s and one `UPDATE` — no table rebuild, safe to run
+statement by statement. The backfill was dry-run as a SELECT against live
+production first: it maps the two self_directed renders to `on_hold`, the
+unstyled premium render on an in-curation order to `in_curation`, and the
+styled curated render on an approved order to `in_production`. All four
+correct.
+
+- **Stage vocabulary is now `received → in_curation → in_qc →
+  in_production → complete`**, plus `on_hold` for self_directed renders,
+  whose path is deliberately deferred and which must not appear in any
+  staffed queue. Renamed in the migration itself rather than stacked as a
+  second one, since 0006 had not been applied yet.
+- **"Accepted as Complete" finishes a render.** Previously nothing moved a
+  render out of `in_production` — generating an image left it there
+  forever. Each generated image in the Production workspace now has an
+  Accept button: it marks that image `selected` + `approved`, unselects any
+  earlier iteration for the same style, and moves the render to
+  `complete`. This is the ONLY thing that makes an image visible to the
+  customer, so generating can never publish by itself.
+- **Every render has a human reference: `#E012622F-2`** — the order number
+  plus its position within that order — shown in the orders list, order
+  detail, and the curation, QC and production workspaces. Computed with
+  `ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY rowid)`, verified
+  against D1. In the workspaces the numbering is computed across the whole
+  order *before* the stage filter is applied, so render 3 stays render 3
+  even when it is the only one on screen.
+- **The customer now sees per-render progress.** `/orders` shows "5 of 6
+  ready" rather than one rolled-up status, and `/order/[id]` lists a card
+  per render: the finished picture where it exists, otherwise plain
+  language for where it is ("Choosing your style", "Being rendered").
+  Internal stage names never reach the customer — `customerStageLabel()`
+  translates them.
+- "Push to Curator" stays an explicit staff action for curated and
+  premium, so a bad photo can be caught before a curator spends time.
+
 ## v0.21.0 — 2026-09-17
 
 - **Render output now matches the source photo's shape and near-exact

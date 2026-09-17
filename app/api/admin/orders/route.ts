@@ -21,6 +21,7 @@ type OrderRenderRow = {
   created_at: string;
   curbappeal_photo_key: string | null;
   item_id: string | null;
+  render_no: number | null;
   tier: string | null;
   stage: string | null;
   style_name: string | null;
@@ -38,7 +39,8 @@ export async function GET() {
     `SELECT o.id as order_id, o.status as order_status, o.property_address,
             o.customer_email, o.job_id, o.created_at, o.curbappeal_photo_key,
             oi.id as item_id, oi.tier, oi.stage, oi.style_name, oi.custom_text,
-            oi.qc_denied_reason, oi.qc_denied_style
+            oi.qc_denied_reason, oi.qc_denied_style,
+            ROW_NUMBER() OVER (PARTITION BY oi.order_id ORDER BY oi.rowid) AS render_no
      FROM orders o
      LEFT JOIN order_items oi ON oi.order_id = o.id
      ORDER BY o.created_at DESC, oi.rowid ASC

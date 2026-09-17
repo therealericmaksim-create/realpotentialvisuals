@@ -40,14 +40,16 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
 
   const items = await env.DB.prepare(
-    `SELECT id, tier, style_name, custom_text, night, seasonal, season_choice,
-            holiday, holiday_choice, breakdown, unit_price_cents
+    `SELECT id, tier, stage, style_id, style_name, custom_text, night, seasonal,
+            season_choice, holiday, holiday_choice, breakdown, unit_price_cents
      FROM order_items WHERE order_id = ? ORDER BY rowid ASC`
   )
     .bind(id)
     .all<{
       id: string;
       tier: string;
+      stage: string;
+      style_id: string | null;
       style_name: string;
       custom_text: string | null;
       night: number;
@@ -59,13 +61,16 @@ export async function GET(req: NextRequest, { params }: Params) {
       unit_price_cents: number;
     }>();
 
-  // Delivered renders for this order's job. Nothing writes `renders` rows
-  // yet (images are produced by hand and the upload step isn't built), so
-  // this is an empty list today by design — the page renders a "not ready
-  // yet" state from it rather than needing a second shape later.
+  // The delivered image for each finished render. A render only reaches
+  // stage 'complete' when an operator accepted one of its generated
+  // images, and that acceptance is what sets approved + selected — so
+  // these two conditions describe exactly the same set. Renders still in
+  // the pipeline simply have no row here, which is what lets the page
+  // show five finished images and say the sixth is still being made.
   const renders = order.job_id
     ? await env.DB.prepare(
-        `SELECT r.id, r.delivered_key, r.storage_key, s.name as style_name, r.created_at
+        `SELECT r.id, r.style_id, r.delivered_key, r.storage_key,
+                s.name as style_name, r.created_at
          FROM renders r
          JOIN styles s ON s.id = r.style_id
          WHERE r.job_id = ? AND r.qc_status = 'approved' AND r.selected = 1
@@ -74,6 +79,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         .bind(order.job_id)
         .all<{
           id: string;
+          style_id: string | null;
           delivered_key: string | null;
           storage_key: string | null;
           style_name: string;

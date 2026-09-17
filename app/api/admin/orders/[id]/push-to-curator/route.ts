@@ -24,12 +24,12 @@ export async function POST(_req: NextRequest, { params }: Params) {
     .first<{ status: string }>();
   if (!order) return NextResponse.json({ error: "order not found" }, { status: 404 });
 
-  // Only renders still sitting at 'new' move. Anything already in
+  // Only renders still sitting at 'received' move. Anything already in
   // curation, QC or production is left exactly where it is — pushing an
   // order must never drag a render backwards out of a later stage.
   const pending = await env.DB.prepare(
     `SELECT COUNT(*) as n FROM order_items
-     WHERE order_id = ? AND tier IN ('curated','premium') AND stage = 'new'`
+     WHERE order_id = ? AND tier IN ('curated','premium') AND stage = 'received'`
   )
     .bind(id)
     .first<{ n: number }>();
@@ -44,8 +44,8 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const now = new Date().toISOString();
 
   await env.DB.prepare(
-    `UPDATE order_items SET stage = 'awaiting_curation'
-     WHERE order_id = ? AND tier IN ('curated','premium') AND stage = 'new'`
+    `UPDATE order_items SET stage = 'in_curation'
+     WHERE order_id = ? AND tier IN ('curated','premium') AND stage = 'received'`
   )
     .bind(id)
     .run();

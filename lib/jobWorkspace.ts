@@ -8,6 +8,12 @@
 export type WorkspaceSlot = {
   id: string;
   order_id: string;
+  // Position within its own order, 1-based. Staff refer to a render as
+  // "order number - render number", so this has to survive the stage
+  // filtering below: it is computed across ALL of the order's renders,
+  // then the filter is applied, so render 3 stays render 3 even when it
+  // is the only one on screen.
+  render_no: number;
   tier: string;
   stage: string;
   style_id: string | null;
@@ -76,19 +82,25 @@ export async function loadJobWorkspace(
     .bind(jobId)
     .first<{ curbappeal_photo_key: string }>();
 
+  // Applied AFTER render_no is computed (see the subquery below) so the
+  // numbering reflects the whole order, not just the visible slice.
   const stageFilter =
     stages && stages.length > 0
-      ? ` AND oi.stage IN (${stages.map(() => "?").join(",")})`
+      ? ` AND stage IN (${stages.map(() => "?").join(",")})`
       : "";
 
   const slots = await db
     .prepare(
-      `SELECT oi.id, oi.order_id, oi.tier, oi.stage, oi.style_id, oi.style_name,
-              oi.custom_text, oi.qc_denied_reason, oi.qc_denied_style,
-              oi.night, oi.seasonal, oi.season_choice, oi.holiday, oi.holiday_choice, oi.breakdown
-       FROM order_items oi JOIN orders o ON o.id = oi.order_id
-       WHERE o.job_id = ?${stageFilter}
-       ORDER BY oi.rowid ASC`
+      `SELECT * FROM (
+         SELECT oi.id, oi.order_id, oi.tier, oi.stage, oi.style_id, oi.style_name,
+                oi.custom_text, oi.qc_denied_reason, oi.qc_denied_style,
+                oi.night, oi.seasonal, oi.season_choice, oi.holiday, oi.holiday_choice,
+                oi.breakdown, oi.rowid AS _rowid,
+                ROW_NUMBER() OVER (PARTITION BY oi.order_id ORDER BY oi.rowid) AS render_no
+         FROM order_items oi JOIN orders o ON o.id = oi.order_id
+         WHERE o.job_id = ?
+       ) WHERE 1=1${stageFilter}
+       ORDER BY _rowid ASC`
     )
     .bind(jobId, ...(stages ?? []))
     .all<WorkspaceSlot>();

@@ -178,6 +178,9 @@
    block. Without this the per-render rows look like unrelated orders. */
 .rpv-admin tr.order-group-start > td{border-top:1px solid var(--border)}
 .rpv-admin tr.order-group-start:first-child > td{border-top:none}
+/* How staff name a render out loud: order number, then its position in
+   that order. Monospace so it reads as an identifier, not prose. */
+.rpv-admin .render-ref{font-family:var(--plate);font-size:11.5px;color:var(--exec);letter-spacing:.04em}
 .rpv-admin .qc-decide{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
 .rpv-admin .qc-decide input[type=text]{flex:1;min-width:240px;background:var(--panel-2);
   border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;

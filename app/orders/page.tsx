@@ -20,6 +20,7 @@ type OrderRow = {
   total_amount_cents: number;
   created_at: string;
   render_count: number;
+  complete_count: number;
 };
 
 export default function OrdersPage() {
@@ -144,7 +145,13 @@ export default function OrdersPage() {
                       {o.render_count === 1 ? "" : "s"} — ${(o.total_amount_cents / 100).toFixed(2)}
                     </div>
                   </div>
-                  <div className="order-card-status">{orderStatusLabel(o.status)}</div>
+                  <div className="order-card-status">
+                    {/* Progress, not a single status: an order can be part
+                        delivered, and the count is the honest answer. */}
+                    {o.render_count > 0 && o.complete_count < o.render_count
+                      ? `${o.complete_count} of ${o.render_count} ready`
+                      : orderStatusLabel(o.status)}
+                  </div>
                 </button>
               ))}
             </div>

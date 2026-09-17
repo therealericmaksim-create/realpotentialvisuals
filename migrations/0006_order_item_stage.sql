@@ -2,20 +2,28 @@
 --
 -- An order can hold several renders, and they do not move through the
 -- pipeline together: QC can deny one back to curation while another is
--- already being rendered. orders.status cannot express that, so every
--- queue that keyed off it was wrong for any multi-render order.
+-- already being rendered, and an order can sit five-sixths delivered.
+-- orders.status cannot express that, so every queue that keyed off it was
+-- wrong for any multi-render order. orders.status survives only as a
+-- rollup of these stages.
+--
+-- Stages: received -> in_curation -> in_qc -> in_production -> complete,
+-- plus on_hold for self_directed renders (the customer chose their own
+-- style; that path is deliberately deferred, so they stay out of every
+-- staffed queue).
 --
 -- DELIBERATELY NO CHECK CONSTRAINT on stage. SQLite cannot alter a CHECK
 -- in place, and the orders-table rebuild needed to change one fails
 -- against D1 (defer_foreign_keys resets between statements, so dropping a
--- referenced table violates its children). Putting this vocabulary in a
--- CHECK would make adding a stage later impossible. The allowed values
--- live in lib/orderStage.ts and are enforced in application code.
+-- referenced table violates its children — proven, it rolled the whole
+-- database back). Putting this vocabulary in a CHECK would make adding a
+-- stage later impossible. The allowed values live in lib/orderStage.ts
+-- and are enforced in application code.
 --
 -- All four statements are plain ADD COLUMN / UPDATE — no table rebuild,
 -- so this is safe to run statement by statement in the D1 console.
 
-ALTER TABLE order_items ADD COLUMN stage TEXT NOT NULL DEFAULT 'new';
+ALTER TABLE order_items ADD COLUMN stage TEXT NOT NULL DEFAULT 'received';
 
 ALTER TABLE order_items ADD COLUMN qc_denied_reason TEXT;
 
@@ -31,9 +39,9 @@ SET stage = CASE
   WHEN (SELECT o.status FROM orders o WHERE o.id = order_items.order_id) = 'in_progress' THEN 'in_production'
   WHEN style_id IS NOT NULL
        AND (SELECT o.status FROM orders o WHERE o.id = order_items.order_id) IN ('in_curation','in_qc')
-       THEN 'awaiting_qc'
+       THEN 'in_qc'
   WHEN style_id IS NULL
        AND (SELECT o.status FROM orders o WHERE o.id = order_items.order_id) = 'in_curation'
-       THEN 'awaiting_curation'
-  ELSE 'new'
+       THEN 'in_curation'
+  ELSE 'received'
 END;

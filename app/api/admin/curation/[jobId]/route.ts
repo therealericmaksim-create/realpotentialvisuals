@@ -14,9 +14,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { env } = getCloudflareContext();
 
   // Only renders actually waiting on a curator. A render QC has already
-  // cleared, or one still sitting at 'new', has no business showing up in
+  // cleared, or one still sitting at 'received', has no business showing up in
   // a curator's workspace.
-  const ws = await loadJobWorkspace(env.DB, jobId, ["awaiting_curation"]);
+  const ws = await loadJobWorkspace(env.DB, jobId, ["in_curation"]);
   if (!ws) return NextResponse.json({ error: "job not found" }, { status: 404 });
 
   return NextResponse.json({
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   for (const a of applied) {
     await env.DB.prepare(
       `UPDATE order_items
-       SET stage = 'awaiting_qc', qc_denied_reason = NULL, qc_denied_style = NULL
+       SET stage = 'in_qc', qc_denied_reason = NULL, qc_denied_style = NULL
        WHERE id = ?`
     )
       .bind(a.orderItemId)

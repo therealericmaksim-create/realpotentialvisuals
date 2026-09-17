@@ -15,7 +15,7 @@ import {
   type RenderTier,
 } from "@/lib/pricing";
 import { STYLE_FAMILIES } from "@/lib/styles";
-import { orderStatusLabel } from "@/lib/orderDisplay";
+import { orderStatusLabel, renderLabel } from "@/lib/orderDisplay";
 import { stageLabel, ORDER_ITEM_STAGES } from "@/lib/orderStage";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import "./admin.css";
@@ -539,6 +539,7 @@ type OrderRenderRow = {
   created_at: string;
   curbappeal_photo_key: string | null;
   item_id: string | null;
+  render_no: number | null;
   tier: string | null;
   stage: string | null;
   style_name: string | null;
@@ -725,6 +726,9 @@ function OrdersListSection({
                       {isGroupStart ? r.order_id : ""}
                     </td>
                     <td>
+                      {r.item_id && (
+                        <div className="render-ref">{renderLabel(r.order_id, r.render_no)}</div>
+                      )}
                       {renderDescription(r)}
                       {r.qc_denied_reason && (
                         <div className="qc-denied">
@@ -766,6 +770,8 @@ function OrdersListSection({
 }
 
 type OrderRenderItem = {
+  id: string;
+  render_no: number;
   tier: string;
   stage: string;
   style_name: string | null;
@@ -888,7 +894,7 @@ function OrderDetailSection({
   // renders are still sitting at 'new' — not about the order's rolled-up
   // status, which says nothing about any individual render.
   const pushableCount = renderItems.filter(
-    (item) => (item.tier === "curated" || item.tier === "premium") && item.stage === "new"
+    (item) => (item.tier === "curated" || item.tier === "premium") && item.stage === "received"
   ).length;
 
   return (
@@ -928,6 +934,7 @@ function OrderDetailSection({
           <table className="data">
             <thead>
               <tr>
+                <th>Render</th>
                 <th>Tier</th>
                 <th>Stage</th>
                 <th>Style / Request</th>
@@ -944,6 +951,7 @@ function OrderDetailSection({
                 if (item.holiday) extras.push(`Holiday (${item.holiday_choice ?? "—"})`);
                 return (
                   <tr key={i}>
+                    <td className="render-ref">{renderLabel(order.id, item.render_no)}</td>
                     <td>{TIER_LABELS[item.tier as keyof typeof TIER_LABELS] ?? item.tier}</td>
                     <td>
                       <span className="pill">{stageLabel(item.stage)}</span>
@@ -1945,6 +1953,7 @@ function CurationQueueSection({ onOpenJob }: { onOpenJob: (jobId: string) => voi
 type CurationSlot = {
   id: string;
   order_id: string;
+  render_no: number;
   tier: string;
   stage: string;
   style_id: string | null;
@@ -2109,7 +2118,7 @@ function JobCurationWorkspaceSection({
   if (!data) return <p className="loading">Loading…</p>;
 
   const { job, slots, analysis, topMatches, curationRanks, regulatory, neighborhood } = data;
-  // Everything this endpoint returns is at stage 'awaiting_curation', so
+  // Everything this endpoint returns is at stage 'in_curation', so
   // there is no assigned/unassigned split to make here any more.
   const unassigned = slots;
 
@@ -2209,10 +2218,11 @@ function JobCurationWorkspaceSection({
       {unassigned.length > 0 && (
         <div className="section-block">
           <h3>Assign styles</h3>
-          {unassigned.map((s, i) => (
+          {unassigned.map((s) => (
             <div key={s.id} className="empty-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
               <strong>
-                {s.tier === "premium" ? "Premium" : "Curated"} render #{i + 1}{" "}
+                <span className="render-ref">{renderLabel(s.order_id, s.render_no)}</span>{" "}
+                {s.tier === "premium" ? "Premium" : "Curated"}{" "}
                 <span className="note">— {slotLabel(s)}</span>
               </strong>
               {s.tier === "premium" && (
@@ -2542,7 +2552,10 @@ function QcWorkspaceSection({
         return (
           <div className="section-block" key={p.orderItemId}>
             <h3>
-              Render #{i + 1} — {p.styleName}{" "}
+              <span className="render-ref">
+                {slot ? renderLabel(slot.order_id, slot.render_no) : `Render #${i + 1}`}
+              </span>{" "}
+              {p.styleName}{" "}
               <span className="note">({p.tier === "premium" ? "Premium" : "Curated"})</span>
             </h3>
             {slot?.tier === "premium" && slot.custom_text && (
@@ -2737,6 +2750,8 @@ function ProductionWorkspaceSection({
   const [error, setError] = useState<string | null>(null);
   const [edited, setEdited] = useState<Record<string, string>>({});
   const [renderingId, setRenderingId] = useState<string | null>(null);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch(`/api/admin/production/${jobId}`)
@@ -2762,10 +2777,40 @@ function ProductionWorkspaceSection({
   if (error && !data) return <p className="error-text">{error}</p>;
   if (!data) return <p className="loading">Loading…</p>;
 
-  const { job, prompts, renders, analysis, topMatches, curationRanks, regulatory, neighborhood } = data;
+  const { job, slots, prompts, renders, analysis, topMatches, curationRanks, regulatory, neighborhood } = data;
 
   function promptText(p: ProductionPrompt): string {
     return edited[p.orderItemId] ?? p.assembledPrompt;
+  }
+
+  // Accepting an image is what finishes a render: it marks that image as
+  // the delivered one and moves the render to 'complete', which is the
+  // only way anything becomes visible to the customer.
+  async function acceptAsComplete(p: ProductionPrompt, renderId: string) {
+    setAcceptingId(renderId);
+    setError(null);
+    try {
+      const r = await fetch(`/api/admin/production/${jobId}/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderItemId: p.orderItemId, renderId }),
+      });
+      const text = await r.text();
+      let parsed: { error?: string } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+      }
+      if (!r.ok) throw new Error(parsed?.error ?? `HTTP ${r.status}`);
+      setAccepted(`${p.styleName} accepted — the customer can see it now.`);
+      load();
+      onRendered();
+    } catch (e) {
+      setError(`Could not accept that image: ${(e as Error).message}`);
+    } finally {
+      setAcceptingId(null);
+    }
   }
 
   async function renderSlot(p: ProductionPrompt) {
@@ -2807,6 +2852,7 @@ function ProductionWorkspaceSection({
       </div>
 
       {error && <p className="error-text">{error}</p>}
+      {accepted && <p className="note">{accepted}</p>}
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         {job.curbappealPhotoKey && (
@@ -2837,10 +2883,14 @@ function ProductionWorkspaceSection({
 
         {prompts.map((p, i) => {
           const mine = renders.filter((r) => r.style_id === p.styleId);
+          const slot = slots.find((sl) => sl.id === p.orderItemId);
           return (
             <div key={p.orderItemId} style={{ marginTop: 22 }}>
               <strong>
-                Render #{i + 1} — {p.styleName}{" "}
+                <span className="render-ref">
+                  {slot ? renderLabel(slot.order_id, slot.render_no) : `Render #${i + 1}`}
+                </span>{" "}
+                {p.styleName}{" "}
                 <span className="note">({p.tier === "premium" ? "Premium" : "Curated"})</span>
               </strong>
               <div className="note" style={{ marginTop: 2 }}>
@@ -2885,8 +2935,17 @@ function ProductionWorkspaceSection({
                       />
                       <figcaption>
                         v{r.iteration_number} — {r.qc_status}
-                        {r.selected ? " — selected" : ""}
+                        {r.selected ? " — delivered" : ""}
                       </figcaption>
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        style={{ marginTop: 6, width: "100%" }}
+                        onClick={() => acceptAsComplete(p, r.id)}
+                        disabled={acceptingId !== null}
+                      >
+                        {acceptingId === r.id ? "Accepting…" : "Accept as Complete"}
+                      </button>
                     </figure>
                   ))}
                 </div>

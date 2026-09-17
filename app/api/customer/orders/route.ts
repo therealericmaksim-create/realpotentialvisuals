@@ -17,6 +17,7 @@ type OrderRow = {
   total_amount_cents: number;
   created_at: string;
   render_count: number;
+  complete_count: number;
 };
 
 export async function GET(req: NextRequest) {
@@ -39,7 +40,9 @@ export async function GET(req: NextRequest) {
   const rows = await env.DB.prepare(
     `SELECT o.id, o.status, o.property_address, o.curbappeal_photo_key,
             o.total_amount_cents, o.created_at,
-            (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) as render_count
+            (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) as render_count,
+            (SELECT COUNT(*) FROM order_items oi
+             WHERE oi.order_id = o.id AND oi.stage = 'complete') as complete_count
      FROM orders o
      WHERE ${ORDER_OWNERSHIP_SQL}
      ORDER BY o.created_at DESC

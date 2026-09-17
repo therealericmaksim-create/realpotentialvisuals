@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
 
 // The QC Queue: one row per job with at least one render at stage
-// 'awaiting_qc' — a curator has chosen its style and that choice, plus the
+// 'in_qc' — a curator has chosen its style and that choice, plus the
 // render instruction built from it, now needs checking.
 //
 // Keyed off the render's stage, not the order's status and not the
@@ -35,7 +35,7 @@ export async function GET() {
      JOIN jobs j ON j.id = o.job_id
      JOIN properties p ON p.id = j.property_id
      JOIN order_items oi ON oi.order_id = o.id
-     WHERE oi.stage = 'awaiting_qc'
+     WHERE oi.stage = 'in_qc'
      GROUP BY j.id
      ORDER BY oldest_order_at ASC`
   ).all<QcQueueRow>();
