@@ -3,6 +3,36 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.19.0 — 2026-09-17
+
+- **New customer order history at `/orders`** — Google sign-in gated, 25
+  per page, newest first, each row showing the order number, street
+  address and the original uploaded photo as a thumbnail. Clicking a row
+  opens `/order/[id]` with the order detail, the original photo, what was
+  ordered, and the delivered renders. The renders section is intentionally
+  wired up now and simply renders an "not ready yet" state, since nothing
+  writes `renders` rows until the image-upload step exists.
+- **New `/api/customer/media/[...key]`** — unlike the staff media route
+  (which serves any key to any signed-in staff member), this refuses to
+  serve a key that isn't reachable from an order the requester owns.
+  Without that check any signed-in customer who saw another customer's
+  photo key could fetch their house photo. "Not yours" and "doesn't
+  exist" return the same 404 so the endpoint can't be used to probe which
+  keys are real.
+- Ownership throughout (`lib/currentCustomer.ts`) matches on the Google
+  account id captured at order time, falling back to the session's
+  verified email so orders placed before customer sign-in existed are
+  still visible to whoever actually placed them. Safe because sign-in
+  rejects any Google account whose email isn't verified.
+- The signed-in name in the header now links to `/orders`.
+- **Added a "Send to QC" recovery button** on the admin order page, shown
+  when an order is still `in_curation` with every curated/premium render
+  already styled. An order curated before v0.18.0's auto-advance existed
+  is otherwise unreachable: it drops out of the Curation Queue (which only
+  lists jobs with UNASSIGNED renders), so its workspace can't be opened to
+  re-save, and nothing else could move it. Found this the hard way on a
+  real order.
+
 ## v0.18.1 — 2026-09-17
 
 - Moved the customer's signed-in identity out of the `/start` page body

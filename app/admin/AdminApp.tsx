@@ -738,6 +738,7 @@ function OrderDetailSection({
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [sendingToQc, setSendingToQc] = useState(false);
   const [showFullRegulatory, setShowFullRegulatory] = useState(false);
 
   const load = useCallback(() => {
@@ -769,6 +770,28 @@ function OrderDetailSection({
       onRan();
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function sendToQc() {
+    setSendingToQc(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/admin/orders/${orderId}/send-to-qc`, { method: "POST" });
+      const text = await r.text();
+      let parsed: { error?: string } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+      load();
+      onRan();
+    } catch (e) {
+      setError(`Failed to send to QC: ${(e as Error).message}`);
+    } finally {
+      setSendingToQc(false);
     }
   }
 
@@ -897,6 +920,12 @@ function OrderDetailSection({
             <span className="note">No curated or premium renders on this order — nothing to push to curation.</span>
           )}
           {order.status === "in_curation" && <span className="pill">pushed to curator</span>}
+          {order.status === "in_curation" && !hasUnassignedCuration && (
+            <button className="btn-primary" onClick={sendToQc} disabled={sendingToQc}>
+              {sendingToQc ? "Sending…" : "Send to QC"}
+            </button>
+          )}
+          {order.status === "in_qc" && <span className="pill">awaiting QC</span>}
         </div>
       )}
 

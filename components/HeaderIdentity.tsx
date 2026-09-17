@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type CustomerIdentity = { name: string | null; email: string | null };
 
@@ -22,7 +23,11 @@ export default function HeaderIdentity() {
 
   return (
     <span className="nav-identity">
-      {identity.name || identity.email}
+      {/* The name doubles as the way into order history — otherwise /orders
+          has no entry point anywhere in the site. */}
+      <Link href="/orders" className="nav-identity-name">
+        {identity.name || identity.email}
+      </Link>
       {" - "}
       <button
         type="button"
