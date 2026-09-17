@@ -54,15 +54,25 @@ Role: **router**, **client_liaison**, **principal**.
 
 ---
 
+> **Pipeline state lives on `order_items.stage`, not `orders.status`.**
+> Every queue below selects on that column. Renders move independently —
+> QC can send one back to the curator while another is already rendering —
+> so `orders.status` is only a rollup kept for the Orders list. Stages:
+> `new`, `awaiting_curation`, `awaiting_qc`, `in_production`, `complete`,
+> `on_hold` (where self_directed sits, that path being deferred).
+> See `lib/orderStage.ts` and `migrations/0006`.
+
 ## 3. Curation — *(Planned — the core differentiator, most urgent)*
 
 The screen the business is actually about. Without it, "human curated" is
 just homepage copy.
 
-- **Curation Queue** — jobs with `jobs.status` ready for curation, sorted by
-  wait time. This is the only nav entry for this section — the workspace
-  below is a detail view reached by clicking a job in this queue, same
-  pattern as Orders → Order Detail, never a standalone nav destination.
+- **Curation Queue** *(built)* — jobs with at least one render at
+  `stage = 'awaiting_curation'`, oldest first. Renders arrive here from
+  "Push to Curator" on the order page, or by being denied in QC. This is
+  the only nav entry for this section — the workspace below is a detail
+  view reached by clicking a job in this queue, same pattern as
+  Orders → Order Detail, never a standalone nav destination.
 - **Job Curation Workspace** (`/admin/job/{id}`) — the main screen:
   - Original photo + retained Street View frame (`curbappeal_property_neighborhood_reads`)
   - Structure analysis read (`curbappeal_property_structure_analysis`)
@@ -85,10 +95,11 @@ Role: **curator**, sign-off from **principal** or **quality_controller**.
 
 Where hands-on time is actually spent every day.
 
-- **Production Queue** *(built)* — orders at `status = 'in_production'`,
-  i.e. QC approved the curation and the render instructions. Opening a row
-  gives the Production workspace, which has no nav entry of its own (same
-  pattern as the Curation and QC workspaces).
+- **Production Queue** *(built)* — jobs with at least one render at
+  `stage = 'in_production'`, i.e. QC approved that render's style and
+  instruction. Opening a row gives the Production workspace, which has no
+  nav entry of its own (same pattern as the Curation and QC workspaces)
+  and shows only the renders at this stage.
   - Shows the same evidence panel as the QC workspace, then per ordered
     render: the instruction, a **Render with AI** button, and every image
     generated so far.
@@ -118,30 +129,27 @@ Role: **designer**.
 
 ---
 
-> **Pipeline state lives on `order_items.stage`, not `orders.status`.**
-> Every queue below selects on that column. Renders move independently —
-> QC can send one back to the curator while another is already rendering —
-> so `orders.status` is only a rollup kept for the Orders list. Stages:
-> `new`, `awaiting_curation`, `awaiting_qc`, `in_production`, `complete`,
-> `on_hold` (where self_directed sits, that path being deferred).
-> See `lib/orderStage.ts` and `migrations/0006`.
-
 ## 5. Quality Control — *(QC Queue built; history/delivered still planned)*
 
-- **QC Queue** *(built)* — orders at `status = 'in_qc'`, i.e. curation has
-  assigned a style to every curated/premium render and the job now needs
-  checking. Keyed off order status, NOT `renders.qc_status`: no `renders`
-  row exists until an operator has generated images by hand, so a
-  qc_status-based queue would read empty forever while real work waited.
+- **QC Queue** *(built)* — jobs with at least one render at
+  `stage = 'awaiting_qc'`, i.e. a curator picked its style and that choice
+  now needs checking. Keyed off the render's stage, NOT `renders.qc_status`:
+  `renders` rows only exist once images have been generated, which happens
+  after this stage, so a qc_status-based queue would read empty forever
+  while real work waited.
   - **QC Workspace** — reached only by "Check Now" on a queue row, no nav
     entry of its own (same pattern as the Job Curation Workspace). Shows
     the same evidence panel the curator saw (structure, regulatory,
     neighborhood read, ranked shortlist) so the reviewer can second-guess
     the style choice against identical information, then the assembled
-    render instruction per ordered render. Prompts are rebuilt from the
-    catalog on every load; the reviewer can edit them, and approving
-    records the final text in `prompt_generations` and moves the order to
-    `in_progress`.
+    render instruction per render awaiting review. Prompts are rebuilt
+    from the catalog on every load and the reviewer can edit them.
+    **Approve and deny are per render**, one at a time — a bulk control
+    would push through renders nobody looked at. Approving records the
+    final text in `prompt_generations` and moves that render to
+    `in_production`. Denying requires a reason, clears the render's style
+    (which is what returns it to the Curation Queue) and shows the
+    rejected style plus the reason to the curator.
 - **Approved / Rejected History** *(planned)* — `qc_reviewer_id`, `qc_reason`
 - **Delivered** *(planned)* — renders with a `delivered_key` set
 
