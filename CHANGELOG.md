@@ -5,6 +5,39 @@ or restore the exact code at any version: `git checkout v0.1.0`.
 
 ## v0.21.0 — 2026-09-17
 
+- **Re-engineered the render prompt (template v3) after the first real
+  render came back wrong** in four ways: the output dimensions changed,
+  the driveway/fence/walkways were altered, the gutters and downspouts
+  were deleted, and first-storey brick was re-clad in siding. Only the
+  first was a code bug; the other three were the prompt failing to forbid
+  things. The governing lesson is now written into the template: an image
+  model treats anything not explicitly protected as fair game. Protection
+  is exhaustive and grouped (framing/output, building geometry, existing
+  masonry, building hardware, site and hardscape, landscape and
+  surroundings), the may-change list is explicitly closed, and an override
+  rule tells the model to DROP a style feature rather than violate a
+  constraint — a partially-styled house that matches the photograph beats
+  a fully-styled one that changed the property. Masonry gets its own
+  section: brick/stone stays brick/stone, per-storey material divisions
+  hold, and style materials apply only to already-non-masonry surfaces,
+  because re-cladding is a structural-scale renovation, not a restyle.
+  The detected-design-elements block no longer tells the model to replace
+  what it finds with the style's equivalent — that instruction was
+  actively inviting the deletions. Night/seasonal variants now state
+  exactly which constraint they override, instead of silently
+  contradicting the "same light, same season" rule.
+- **Output size now follows the source photo.** Generation hardcoded
+  1536x1024 landscape; the sample house photo in this repo is 1148x1530
+  PORTRAIT, so a portrait upload was being re-framed into a wide crop
+  before the model rendered anything. `readImageDimensions()` parses
+  width/height from the JPEG/PNG/WebP header (verified against real files
+  by two independent methods) and the closest-aspect supported size is
+  chosen. NOTE: gpt-image-1 only emits 1024x1024, 1536x1024 and 1024x1536,
+  so an EXACT pixel match with the customer's photo is not achievable at
+  this layer — the requested size and the source dimensions are now
+  recorded on each render event so the gap stays visible.
+
+
 **Requires `migrations/0006_order_item_stage.sql` before deploying.** All
 four statements are plain `ALTER TABLE ADD COLUMN` / `UPDATE` — no table
 rebuild — so it is safe to run statement by statement in the D1 console,

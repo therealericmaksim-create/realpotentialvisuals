@@ -1,22 +1,28 @@
 // Assembles the image-generation instruction for one ordered render.
 //
-// This is a deterministic template fill, NOT an AI call: the render itself
-// is produced by a human pasting this text into Midjourney (no official
-// API — see the Automation Routing Sheet), so the value here is producing
-// instructions complete enough that two different operators get the same
-// result. Everything it interpolates already exists in the catalog the
-// Python pipeline seeded: the style's typical materials
-// (style_materials_typical, commented in the schema as "feeds prompt
-// generation"), its required design elements (style_design_elements), and
-// the house's own measured structure profile.
+// Deterministic template fill, not an AI call. Everything it interpolates
+// already exists in the catalog the Python pipeline seeded: the style's
+// typical materials (style_materials_typical), its required design
+// elements (style_design_elements), and the house's own measured
+// structure profile.
 //
-// The single most important property of this prompt is the structure/style
-// split: the business promise is "your actual house, restyled", so every
-// structural fact we measured is stated as must-not-change, and only
-// surface treatment is opened up. A prompt that lets the model redesign
-// the house is worse than no prompt at all.
+// THE GOVERNING LESSON (2026-09-17, from the first real render):
+// an image model treats anything not explicitly protected as fair game.
+// The first version of this template protected the building's geometry
+// and little else, and the result came back with the driveway and fence
+// altered, the gutters and downspouts deleted, and the first-storey brick
+// re-clad in siding. None of that was "wrong" against that prompt — it
+// simply had not been forbidden.
+//
+// So protection here is exhaustive and organised by category, the
+// may-change list is deliberately narrow and closed, and there is a
+// catch-all rule: if applying a style feature would require touching
+// anything protected, the feature is dropped rather than the protection.
+// When a render comes back wrong, the fix belongs in the relevant
+// constraint section — not in a revision request, and not in the
+// operator's memory.
 
-export const PROMPT_TEMPLATE_VERSION = "rpv-retexture-v2";
+export const PROMPT_TEMPLATE_VERSION = "rpv-retexture-v3";
 
 // 'retexture' vs 'full_generation' is the prompt_generations CHECK
 // vocabulary. Everything this builder produces is a retexture by
@@ -77,8 +83,8 @@ const WINDOW_RATIO_LABELS: Record<string, string> = {
 };
 
 const NEGATIVE_PROMPT = [
+  // geometry
   "different house",
-  "different floor plan",
   "changed footprint",
   "added storey",
   "removed storey",
@@ -88,16 +94,39 @@ const NEGATIVE_PROMPT = [
   "changed roof pitch",
   "changed roofline",
   "new addition",
+  // materials that must survive
+  "brick replaced with siding",
+  "stone replaced with siding",
+  "masonry re-clad",
+  "painted over brick",
+  // building hardware
+  "missing gutters",
+  "missing downspouts",
+  "removed vents",
+  "removed utility meter",
+  // site
+  "changed driveway",
+  "repaved driveway",
+  "changed walkway",
+  "changed fence",
+  "removed fence",
+  "new landscaping",
+  "removed trees",
+  "changed neighbouring houses",
+  // framing
   "different camera angle",
   "different perspective",
+  "zoomed in",
+  "zoomed out",
   "cropped differently",
+  "different aspect ratio",
+  // rendering quality
   "cartoon",
   "illustration",
   "painting",
   "sketch",
   "distorted proportions",
   "warped straight lines",
-  "extra buildings",
   "people",
   "text",
   "watermark",
@@ -107,54 +136,63 @@ const NEGATIVE_PROMPT = [
 function structureLines(s: StructureFacts | null): string[] {
   if (!s) {
     return [
-      "- No structural analysis was run on this property, so treat EVERY structural feature visible in the source photo as fixed: footprint, storey count, roofline and pitch, every window and door opening, porch, garage, chimney, and foundation height.",
+      "   - No structural analysis was run on this property. Treat EVERY structural feature visible in the photo as fixed: footprint, storey count, roofline and pitch, every window and door opening, porch, garage, chimney and foundation height.",
     ];
   }
 
   const lines = [
-    `- Building type and massing: ${s.house_type}, ${s.massing_envelope} — keep the footprint and overall silhouette identical.`,
+    `   - Building type and massing: ${s.house_type}, ${s.massing_envelope}. Footprint and overall silhouette identical.`,
   ];
-  if (s.storey_count) lines.push(`- Storey count: ${s.storey_count} — do not add or remove floors.`);
+  if (s.storey_count) lines.push(`   - Storey count: ${s.storey_count}. Do not add or remove floors.`);
   if (s.roof_form || s.roof_pitch_bucket) {
     const pitch = s.roof_pitch_bucket ? PITCH_LABELS[s.roof_pitch_bucket] ?? s.roof_pitch_bucket : null;
     lines.push(
-      `- Roof: ${[s.roof_form ? `${s.roof_form} form` : null, pitch ? `${pitch} pitch` : null]
+      `   - Roof: ${[s.roof_form ? `${s.roof_form} form` : null, pitch ? `${pitch} pitch` : null]
         .filter(Boolean)
-        .join(", ")} — keep the same roof geometry, ridge lines and eave overhangs.`
+        .join(", ")}. Same roof geometry, ridge lines, eave overhangs and rake lines.`
     );
   }
-  if (s.symmetry_axis) lines.push(`- Facade symmetry: ${s.symmetry_axis} — preserve it exactly.`);
+  if (s.symmetry_axis) lines.push(`   - Facade symmetry: ${s.symmetry_axis}. Preserve exactly.`);
   if (s.window_ratio_bucket) {
     lines.push(
-      `- Window-to-wall ratio: ${WINDOW_RATIO_LABELS[s.window_ratio_bucket] ?? s.window_ratio_bucket} — every opening keeps its existing position, size and proportion.`
+      `   - Glazing: ${WINDOW_RATIO_LABELS[s.window_ratio_bucket] ?? s.window_ratio_bucket}. Every opening keeps its existing position, size, proportion and operation.`
     );
   }
   if (s.foundation_visibility) {
-    lines.push(`- Foundation visibility: ${s.foundation_visibility} — keep the same height above grade.`);
+    lines.push(`   - Foundation visibility: ${s.foundation_visibility}. Same height above grade.`);
   }
-  if (s.chimney_placement) lines.push(`- Chimney: ${s.chimney_placement} — keep it where it is.`);
-  if (s.facade_width_ft) lines.push(`- Facade width: approximately ${s.facade_width_ft} ft — do not widen or narrow the house.`);
+  if (s.chimney_placement) lines.push(`   - Chimney: ${s.chimney_placement}. Same position, height and count.`);
+  if (s.facade_width_ft) {
+    lines.push(`   - Facade width: approximately ${s.facade_width_ft} ft. Do not widen or narrow the house.`);
+  }
   return lines;
 }
 
-function extrasSection(slot: PromptSlot): string {
+// Night and seasonal renders are the one sanctioned exception to "same
+// light, same season" — so the constraint has to say so, or the model is
+// being handed a direct contradiction.
+function hasVariant(slot: PromptSlot): boolean {
+  return Boolean(slot.night || slot.seasonal || slot.holiday);
+}
+
+function variantSection(slot: PromptSlot): string {
   const blocks: string[] = [];
   if (slot.night) {
     blocks.push(
-      "NIGHT VIEW: render this at dusk under a deep blue evening sky, with warm interior light visible through the windows and tasteful exterior architectural lighting (path, facade wash, porch fixtures). Keep the same camera position as the daylight framing."
+      "- NIGHT VIEW: render at dusk under a deep blue evening sky, with warm interior light in the windows and tasteful exterior architectural lighting (path, facade wash, porch fixtures). This overrides the daylight/time-of-day constraint ONLY. Camera, building, hardscape and landscape are still fixed."
     );
   }
   if (slot.seasonal) {
     blocks.push(
-      `SEASONAL TREATMENT: depict the property in ${slot.seasonChoice ?? "the requested season"} — adjust foliage, ground cover, light quality and sky to match that season, without changing the building itself or removing mature trees.`
+      `- SEASONAL: depict the property in ${slot.seasonChoice ?? "the requested season"}. Foliage state, ground cover, light quality and sky may change to match. This overrides the season constraint ONLY — trees, beds and hardscape keep their existing positions, shapes and extents; nothing is added or removed.`
     );
   }
   if (slot.holiday) {
     blocks.push(
-      `HOLIDAY DECOR: add tasteful ${slot.holidayChoice ?? "seasonal"} decoration appropriate to the style — exterior lighting, wreaths, garland and door dressing only. Decoration is temporary dressing: it must not hide or alter architecture.`
+      `- HOLIDAY DECOR: add tasteful ${slot.holidayChoice ?? "seasonal"} decoration — exterior lighting, wreaths, garland, door dressing. Decoration is temporary dressing laid over the house: it must not hide, replace or alter any architecture, hardware or planting beneath it.`
     );
   }
-  return blocks.join("\n\n");
+  return blocks.join("\n");
 }
 
 export async function buildRenderPrompts(
@@ -229,11 +267,12 @@ export async function buildRenderPrompts(
     const optional = elRows.filter((e) => e.requirement === "optional").map((e) => e.name);
 
     const styleName = style?.name ?? slot.styleName;
+    const variants = variantSection(slot);
 
     const parts: string[] = [];
 
     parts.push(
-      `RESTYLE THE HOUSE IN THIS PHOTOGRAPH INTO ${styleName.toUpperCase()}. This is a retexture of one specific real house, not a new design — the same building must be recognisable in the result.`
+      `TASK: Restyle the exterior surfaces of the house in this photograph into ${styleName.toUpperCase()}. This is a surface retexture of one specific real house, photographed as it exists today. The same building, on the same site, must be immediately recognisable in the result. You are redecorating it, not redesigning or rebuilding it.`
     );
 
     parts.push(
@@ -242,50 +281,97 @@ export async function buildRenderPrompts(
       }`
     );
 
-    parts.push(`MUST NOT CHANGE — the existing structure, exactly as photographed:\n${structureLines(structure).join("\n")}
-- Camera position, angle, focal length, framing and distance from the house.
-- Everything around the house: neighbouring buildings, driveway, street, sidewalk, fencing, grade and any mature trees.`);
+    parts.push(
+      `ABSOLUTE CONSTRAINTS — everything in this section must come through unchanged. These outrank the style direction in every case.
+
+1. FRAMING AND OUTPUT
+   - Identical camera position, angle, height, focal length and distance.
+   - Identical framing and crop: same aspect ratio, same composition, same amount of the scene visible. Do not zoom, pan, straighten, re-centre or recompose.
+   - The output must align with the source photograph if the two were laid on top of each other.
+
+2. BUILDING GEOMETRY
+${structureLines(structure).join("\n")}
+   - Every window and door stays in its exact position, at its exact size and proportion. Openings are never moved, added, removed or resized.
+   - Porches, stoops, garages, bays, dormers and attached structures keep their existing positions, footprints and rooflines.
+
+3. EXISTING MASONRY — NEVER RE-CLAD
+   - Any brick, stone, block or other masonry visible on the house STAYS masonry, in the same place, over the same extent, in the same colour family. It is never replaced with siding, shingle, stucco, panel or board.
+   - Where the house uses different materials on different storeys or wings (for example masonry on the first storey and siding above), that division line stays exactly where it is. Do not extend one material over the other.
+   - Re-cladding masonry is a structural-scale renovation, not a restyle, and it is out of scope for this image no matter what the target style normally uses. The style's materials apply ONLY to surfaces that are already non-masonry.
+
+4. BUILDING HARDWARE AND FUNCTIONAL ELEMENTS — all present, all in place
+   - Gutters, downspouts, leader boxes, drip edge and flashing: same number, same runs, same positions. These are never removed or hidden.
+   - Roof vents, ridge vents, plumbing stacks, attic vents, chimney caps.
+   - Electric meter, service mast and drop, utility boxes, hose bibs, AC condenser and its pad, satellite dish, exterior outlets.
+   - Steps, stair treads, handrails and railings keep their existing positions and geometry.
+
+5. SITE AND HARDSCAPE — outside the building's walls, nothing changes at all
+   - Driveway: same material, colour, shape, width, extent, joints and staining.
+   - Walkways, paths, front steps, patios, porches at grade: unchanged.
+   - Fencing and gates: same material, height, style, colour and line. Retaining walls, curbs and edging: unchanged.
+   - Mailbox, lamp posts, freestanding house numbers, utility poles, guy wires, drains and grates: unchanged.
+
+6. LANDSCAPE AND SURROUNDINGS
+   - Every tree, shrub, hedge, planting bed, lawn area, mulch line and ground cover keeps its existing position, size, shape and species. Nothing is added, removed, moved or "tidied".
+   - Neighbouring houses, the street, kerb, sidewalk, parked vehicles, power lines, terrain and grade: unchanged.
+   - Sky, weather, season, time of day, light direction and shadow geometry: unchanged${
+     hasVariant(slot) ? ", except where a VARIANT instruction below explicitly overrides it" : ""
+   }.
+
+7. THE OVERRIDE RULE
+   - If applying any feature of ${styleName} would require moving a wall, changing an opening, altering the roofline, re-cladding masonry, or touching anything in sections 4, 5 or 6 — DO NOT APPLY THAT FEATURE. Omit it silently and restyle what you legitimately can. A partially-styled house that matches the photograph is correct; a fully-styled house that has changed the property is wrong.`
+    );
 
     const changeLines: string[] = [];
     if (byRole("primary").length > 0) {
-      changeLines.push(`- Primary cladding and wall material: ${byRole("primary").join(", ")}.`);
+      changeLines.push(
+        `   - Wall cladding on NON-MASONRY surfaces only: ${byRole("primary").join(", ")}.`
+      );
     }
-    if (byRole("accent").length > 0) changeLines.push(`- Accent materials: ${byRole("accent").join(", ")}.`);
-    if (byRole("trim").length > 0) changeLines.push(`- Trim materials: ${byRole("trim").join(", ")}.`);
+    if (byRole("accent").length > 0) changeLines.push(`   - Accent materials: ${byRole("accent").join(", ")}.`);
+    if (byRole("trim").length > 0) changeLines.push(`   - Trim materials: ${byRole("trim").join(", ")}.`);
+    changeLines.push(
+      "   - Paint, stain and finish colours on siding, trim, fascia, soffit, front door, garage door and shutters."
+    );
+    changeLines.push(
+      "   - Window and door STYLING only: muntin/grille pattern, sash detailing, panel profile, hardware and surround trim. The opening itself never changes."
+    );
+    changeLines.push(
+      "   - Shutters, porch column and railing profiles within the porch's existing footprint, and trim detailing applied to surfaces that already exist."
+    );
+    changeLines.push("   - Roofing material and colour on the existing roof planes, keeping the same geometry.");
+    changeLines.push("   - Light fixtures and house numbers mounted on the building.");
     if (required.length > 0) {
-      changeLines.push(`- Defining details this style requires: ${required.join(", ")}.`);
+      changeLines.push(
+        `   - Details this style requires, applied only where they attach to existing surfaces without violating any constraint above: ${required.join(", ")}.`
+      );
     }
     if (optional.length > 0) {
-      changeLines.push(`- Optional period-correct details, where they fit the existing structure: ${optional.join(", ")}.`);
+      changeLines.push(
+        `   - Optional period-correct details, same condition: ${optional.join(", ")}.`
+      );
     }
-    changeLines.push(
-      `- Colour palette, surface texture, window muntin pattern, door design, shutters, railings, porch detailing, light fixtures and house numbers — all restyled to ${styleName}.`
-    );
-    changeLines.push(
-      "- Planting and beds may be refreshed to suit the style, but do not relocate hardscape or remove established trees."
-    );
 
     parts.push(
-      `WHAT TO CHANGE — apply ${styleName} as a surface and detail renovation only:\n${changeLines.join("\n")}`
+      `WHAT MAY CHANGE — this list is closed. Anything not named here stays as photographed.\n${changeLines.join("\n")}`
     );
 
     if (detectedNames.length > 0) {
       parts.push(
-        `ALREADY PRESENT ON THIS HOUSE (detected from the photo — where any of these conflict with ${styleName}, replace them with the style's equivalent rather than leaving them mixed):\n${detectedNames.join(", ")}.`
+        `EXISTING CHARACTER DETECTED ON THIS HOUSE (context, not a to-do list — these describe what is there now; protect anything covered by the constraints above and restyle only what section "WHAT MAY CHANGE" permits):\n${detectedNames.join(", ")}.`
       );
     }
 
     if (slot.tier === "premium" && slot.customText) {
       parts.push(
-        `CUSTOMER'S OWN REQUEST (premium tier — honour this alongside the style direction above; where it conflicts with the style, the customer's request wins, but it never overrides the structural constraints):\n${slot.customText}`
+        `CUSTOMER'S OWN REQUEST (premium tier — honour this alongside the style direction; where it conflicts with the style, the customer wins. It NEVER overrides the ABSOLUTE CONSTRAINTS — if the request cannot be satisfied within them, apply the part that can be):\n${slot.customText}`
       );
     }
 
-    const extras = extrasSection(slot);
-    if (extras) parts.push(extras);
+    if (variants) parts.push(`VARIANT INSTRUCTIONS\n${variants}`);
 
     parts.push(
-      "OUTPUT: a single photorealistic architectural exterior photograph of this same house, shot from the same camera position as the source image, sharp detail, realistic materials and lighting, no people, no text, no watermark."
+      "OUTPUT: a single photorealistic architectural exterior photograph of this same house on this same site, from the same camera position and with the same framing and aspect ratio as the source image. Sharp detail, realistic materials, physically consistent lighting. No people, no text, no watermark."
     );
 
     built.push({

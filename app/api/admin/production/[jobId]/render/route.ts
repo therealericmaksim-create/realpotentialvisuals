@@ -127,7 +127,15 @@ export async function POST(req: NextRequest, { params }: Params) {
       crypto.randomUUID(),
       renderId,
       staff.id,
-      JSON.stringify({ jobId, styleId: slot.style_id, iteration, storageKey }),
+      JSON.stringify({
+        jobId,
+        styleId: slot.style_id,
+        iteration,
+        storageKey,
+        requestedSize: generated.requestedSize,
+        sourceWidth: generated.sourceWidth,
+        sourceHeight: generated.sourceHeight,
+      }),
       now
     )
     .run();
