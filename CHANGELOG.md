@@ -3,6 +3,20 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.22.1 — 2026-09-17
+
+- **Production now shows when an approved prompt is out of date.** The
+  rule that production renders the prompt QC signed off, rather than
+  whatever the catalog says today, is right for accountability — but it
+  meant a template improvement could never reach a render that had already
+  been approved. A render approved under template v2 kept rendering v2
+  text after v3 fixed masonry, hardscape and gutter preservation, which is
+  exactly the render that came back wrong. The approved prompt is still
+  the default, the current-template rebuild is returned alongside it, and
+  when the versions differ the workspace says so and offers a one-click
+  switch. What gets rendered is still whatever text is in the box, so the
+  audit trail stays honest.
+
 ## v0.22.0 — 2026-09-17
 
 **Requires `migrations/0006_order_item_stage.sql` before deploying.** Three

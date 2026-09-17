@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCurrentStaff } from "@/lib/currentStaff";
-import { buildRenderPrompts } from "@/lib/renderPrompt";
+import { buildRenderPrompts, PROMPT_TEMPLATE_VERSION } from "@/lib/renderPrompt";
 import { loadJobWorkspace, promptSlotsFrom } from "@/lib/jobWorkspace";
 
 // The Production workspace: the same evidence the QC reviewer saw, plus
@@ -12,8 +12,15 @@ import { loadJobWorkspace, promptSlotsFrom } from "@/lib/jobWorkspace";
 // the catalog, because its job is to review the current best instruction.
 // Production prefers the prompt QC actually approved (the newest
 // prompt_generations row for that style), because production must render
-// what was signed off, not whatever the catalog says today. It only falls
-// back to a rebuild when no approved prompt exists.
+// what was signed off, not whatever the catalog says today.
+//
+// But "what was signed off" goes stale the moment the template improves,
+// and a render approved under an older template would otherwise be stuck
+// rendering a prompt with known defects — exactly what happened when v3
+// fixed masonry, hardscape and gutter preservation while an
+// already-approved render kept its v2 text. So BOTH are returned: the
+// approved prompt stays the default, the current-template rebuild travels
+// alongside it, and the operator is told when they differ.
 
 type Params = { params: Promise<{ jobId: string }> };
 
@@ -45,13 +52,20 @@ export async function GET(_req: NextRequest, { params }: Params) {
         template_version: string;
       }>();
 
+    const approvedVersion = approved?.template_version ?? null;
     prompts.push({
       ...p,
       promptGenerationId: approved?.id ?? null,
       source: approved ? ("qc_approved" as const) : ("rebuilt" as const),
       assembledPrompt: approved?.assembled_prompt ?? p.assembledPrompt,
       negativePrompt: approved?.negative_prompt ?? p.negativePrompt,
-      templateVersion: approved?.template_version ?? p.templateVersion,
+      templateVersion: approvedVersion ?? p.templateVersion,
+      // The current-template build travels alongside the approved one, so
+      // the operator can switch without leaving the page.
+      rebuiltPrompt: p.assembledPrompt,
+      rebuiltNegativePrompt: p.negativePrompt,
+      currentTemplateVersion: PROMPT_TEMPLATE_VERSION,
+      isStale: Boolean(approvedVersion && approvedVersion !== PROMPT_TEMPLATE_VERSION),
     });
   }
 

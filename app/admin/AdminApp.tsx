@@ -2711,6 +2711,10 @@ function ProductionQueueSection({ onOpenJob }: { onOpenJob: (jobId: string) => v
 type ProductionPrompt = BuiltPrompt & {
   promptGenerationId: string | null;
   source: "qc_approved" | "rebuilt";
+  rebuiltPrompt: string;
+  rebuiltNegativePrompt: string;
+  currentTemplateVersion: string;
+  isStale: boolean;
 };
 
 type RenderRow = {
@@ -2895,9 +2899,25 @@ function ProductionWorkspaceSection({
               </strong>
               <div className="note" style={{ marginTop: 2 }}>
                 {p.source === "qc_approved"
-                  ? "Using the instruction QC approved."
+                  ? `Using the instruction QC approved (template ${p.templateVersion}).`
                   : "No QC-approved instruction found for this style — rebuilt from the catalog."}
               </div>
+
+              {p.isStale && (
+                <div className="stale-prompt">
+                  Approved under template <strong>{p.templateVersion}</strong>, but the current template is{" "}
+                  <strong>{p.currentTemplateVersion}</strong>. Newer templates exist because older ones
+                  produced bad renders, so rendering this as-is will repeat whatever the old one got wrong.
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    style={{ marginLeft: 10 }}
+                    onClick={() => setEdited((cur) => ({ ...cur, [p.orderItemId]: p.rebuiltPrompt }))}
+                  >
+                    Use template {p.currentTemplateVersion}
+                  </button>
+                </div>
+              )}
 
               <textarea
                 className="prompt-box"
