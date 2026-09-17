@@ -85,18 +85,35 @@ Role: **curator**, sign-off from **principal** or **quality_controller**.
 
 Where hands-on time is actually spent every day.
 
-- **Daily Worksheet** (`/admin/batch`) — one row per ordered style, assembled
-  Midjourney prompt with a copy button, upload slot for the result (render
-  generation itself stays manual/Midjourney per the Routing Sheet —
-  deliberately not scripted against an unofficial API)
-- **Material Selections** — Designer's per-style M1–M13 picks
-  (`job_material_selections`)
-- **Prompt History** — assembled prompts, template version, retexture vs.
-  full-generation mode (`prompt_generations`)
-- **Render Iterations** — revision count, which iteration was selected
-  (`renders`)
+- **Production Queue** *(built)* — orders at `status = 'in_production'`,
+  i.e. QC approved the curation and the render instructions. Opening a row
+  gives the Production workspace, which has no nav entry of its own (same
+  pattern as the Curation and QC workspaces).
+  - Shows the same evidence panel as the QC workspace, then per ordered
+    render: the instruction, a **Render with AI** button, and every image
+    generated so far.
+  - Rendering calls OpenAI's image EDIT endpoint with the customer's own
+    photo as the input, not text-to-image — the promise is "your actual
+    house, restyled", which a text-only generation cannot keep. The result
+    is written to R2 under `renders/` and recorded in `renders`.
+  - Prompt precedence differs from QC deliberately: QC always rebuilds
+    from the catalog (it reviews the current best instruction), production
+    prefers the prompt QC actually approved (it must render what was
+    signed off), falling back to a rebuild only if none exists.
+  - New renders land at `qc_status='pending'`, `selected=0`. The customer
+    order page only shows approved+selected renders, so generating an
+    image can never accidentally publish a bad one. The approve/select
+    step is the still-planned QC history screen below.
+- **Daily Worksheet** *(planned)* — one row per ordered style across the
+  day's jobs, for batch work
+- **Prompt History** *(planned)* — assembled prompts, template version,
+  retexture vs. full-generation mode (`prompt_generations`)
 
-Backing tables: `prompt_generations`, `renders`, `job_material_selections`.
+Removed from this group: *Material Selections* (per-style M1–M13 picks)
+and *Render Iterations*, both folded into the Production workspace or
+dropped.
+
+Backing tables: `orders` (queue), `prompt_generations`, `renders`.
 Role: **designer**.
 
 ---

@@ -33,6 +33,7 @@ type DashboardData = {
   awaitingAnalysis: number;
   awaitingCuration: number;
   awaitingQc: number;
+  awaitingProduction: number;
   openRequests: number;
   openEscalations: number;
   todayIntake: number;
@@ -62,11 +63,12 @@ const NAV: NavGroup[] = [
     // this queue, never a standalone destination.
     { key: "curation-queue", label: "Curation Queue", status: "built" },
   ]},
-  { key: "production", label: "Production", color: "var(--ops)", priority: 2, children: [
+  { key: "production", label: "Production", color: "var(--ops)", priority: 2, badge: "awaitingProduction", children: [
+    // The production workspace, like the curation and QC ones, is reached
+    // only by clicking a queue row — no nav entry of its own.
+    { key: "production-queue", label: "Production Queue", status: "built" },
     { key: "production-worksheet", label: "Daily Worksheet", status: "planned" },
-    { key: "production-materials", label: "Material Selections", status: "planned" },
     { key: "production-prompts", label: "Prompt History", status: "planned" },
-    { key: "production-renders", label: "Render Iterations", status: "planned" },
   ]},
   { key: "qc", label: "Quality Control", color: "var(--exec)", priority: 3, badge: "awaitingQc", children: [
     // Like the Curation Queue, the QC workspace has no nav entry of its
@@ -197,6 +199,12 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
   function openQcJob(id: string) {
     setSelectedJobId(id);
     setSection("qc-detail");
+    setNavToken((t) => t + 1);
+  }
+
+  function openProductionJob(id: string) {
+    setSelectedJobId(id);
+    setSection("production-detail");
     setNavToken((t) => t + 1);
   }
 
@@ -386,6 +394,17 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
               onApproved={loadDashboard}
             />
           )}
+          {section === "production-queue" && (
+            <ProductionQueueSection key={navToken} onOpenJob={openProductionJob} />
+          )}
+          {section === "production-detail" && selectedJobId && (
+            <ProductionWorkspaceSection
+              key={navToken}
+              jobId={selectedJobId}
+              onBack={() => goTo("production-queue")}
+              onRendered={loadDashboard}
+            />
+          )}
           {![
             "dashboard",
             "orders-list",
@@ -397,6 +416,8 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
             "curation-workspace",
             "qc-queue",
             "qc-detail",
+            "production-queue",
+            "production-detail",
           ].includes(section) && <PlaceholderSection sectionKey={section} />}
         </main>
       </div>
@@ -422,16 +443,23 @@ function DashboardSection({
     {
       label: "Awaiting Curation",
       value: dashboard?.awaitingCuration ?? "—",
-      sub: "The core differentiator — not yet built",
+      sub: "A curator still has to pick the style",
       tone: (dashboard?.awaitingCuration ?? 0) > 0 ? "warn" : "",
       go: "curation-queue",
     },
     {
       label: "Awaiting QC",
       value: dashboard?.awaitingQc ?? "—",
-      sub: "Renders pending review before delivery",
+      sub: "Curation done, instructions need checking",
       tone: "",
       go: "qc-queue",
+    },
+    {
+      label: "In Production",
+      value: dashboard?.awaitingProduction ?? "—",
+      sub: "QC approved, images need generating",
+      tone: (dashboard?.awaitingProduction ?? 0) > 0 ? "warn" : "",
+      go: "production-queue",
     },
     {
       label: "Open Requests",
@@ -2505,6 +2533,305 @@ function QcWorkspaceSection({
           {approving ? "Approving…" : "Approve & Send to Production"}
         </button>
       )}
+    </>
+  );
+}
+
+type ProductionQueueRow = {
+  job_id: string;
+  property_address: string;
+  curbappeal_photo_key: string | null;
+  render_count: number;
+  rendered_count: number;
+  oldest_order_at: string;
+};
+
+function ProductionQueueSection({ onOpenJob }: { onOpenJob: (jobId: string) => void }) {
+  const [jobs, setJobs] = useState<ProductionQueueRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    fetch("/api/admin/production")
+      .then(async (r) => {
+        const text = await r.text();
+        let parsed: { jobs?: ProductionQueueRow[]; error?: string } | null = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+        return parsed as { jobs: ProductionQueueRow[] };
+      })
+      .then((d) => setJobs(d.jobs ?? []))
+      .catch((e: Error) => setError(`Failed to load production queue: ${e.message}`));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return (
+    <>
+      <div className="page-head">
+        <div className="eyebrow">Production</div>
+        <h1>Production Queue</h1>
+        <p>QC-approved orders whose images still need generating. Oldest first.</p>
+      </div>
+
+      {error && <p className="error-text">{error}</p>}
+      {!jobs && !error && <p className="loading">Loading…</p>}
+      {jobs && jobs.length === 0 && <p className="loading">Nothing waiting on production right now.</p>}
+
+      {jobs && jobs.length > 0 && (
+        <div className="section-block">
+          <table className="data">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Address</th>
+                <th>Rendered</th>
+                <th>Waiting since</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.map((j) => (
+                <tr key={j.job_id} className="clickable" onClick={() => onOpenJob(j.job_id)}>
+                  <td>
+                    {j.curbappeal_photo_key ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img className="order-thumb" src={`/api/admin/media/${j.curbappeal_photo_key}`} alt="" />
+                    ) : (
+                      <div className="order-thumb order-thumb-empty" />
+                    )}
+                  </td>
+                  <td>{j.property_address}</td>
+                  <td>
+                    {j.rendered_count} / {j.render_count}
+                  </td>
+                  <td>{new Date(j.oldest_order_at).toLocaleString()}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <button
+                      className="btn-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenJob(j.job_id);
+                      }}
+                    >
+                      Open
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+type ProductionPrompt = BuiltPrompt & {
+  promptGenerationId: string | null;
+  source: "qc_approved" | "rebuilt";
+};
+
+type RenderRow = {
+  id: string;
+  style_id: string;
+  storage_key: string | null;
+  delivered_key: string | null;
+  iteration_number: number;
+  qc_status: string;
+  selected: number;
+  created_at: string;
+  style_name: string;
+};
+
+type ProductionWorkspaceData = {
+  job: { id: string; propertyAddress: string; curbappealPhotoKey: string | null };
+  slots: CurationSlot[];
+  prompts: ProductionPrompt[];
+  renders: RenderRow[];
+  analysis: AnalysisSummary;
+  topMatches: TopMatch[];
+  curationRanks: CurationRank[];
+  regulatory: RegulatorySummary;
+  neighborhood: NeighborhoodSummary;
+};
+
+function ProductionWorkspaceSection({
+  jobId,
+  onBack,
+  onRendered,
+}: {
+  jobId: string;
+  onBack: () => void;
+  onRendered: () => void;
+}) {
+  const [data, setData] = useState<ProductionWorkspaceData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [edited, setEdited] = useState<Record<string, string>>({});
+  const [renderingId, setRenderingId] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    fetch(`/api/admin/production/${jobId}`)
+      .then(async (r) => {
+        const text = await r.text();
+        let parsed: (ProductionWorkspaceData & { error?: string }) | null = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
+        return parsed as ProductionWorkspaceData;
+      })
+      .then((d) => setData(d))
+      .catch((e: Error) => setError(`Failed to load production workspace: ${e.message}`));
+  }, [jobId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (error && !data) return <p className="error-text">{error}</p>;
+  if (!data) return <p className="loading">Loading…</p>;
+
+  const { job, prompts, renders, analysis, topMatches, curationRanks, regulatory, neighborhood } = data;
+
+  function promptText(p: ProductionPrompt): string {
+    return edited[p.orderItemId] ?? p.assembledPrompt;
+  }
+
+  async function renderSlot(p: ProductionPrompt) {
+    setRenderingId(p.orderItemId);
+    setError(null);
+    try {
+      const r = await fetch(`/api/admin/production/${jobId}/render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderItemId: p.orderItemId, prompt: promptText(p) }),
+      });
+      const text = await r.text();
+      let parsed: { error?: string } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+      }
+      if (!r.ok) throw new Error(parsed?.error ?? `HTTP ${r.status}`);
+      load();
+      onRendered();
+    } catch (e) {
+      setError(`Render failed: ${(e as Error).message}`);
+    } finally {
+      setRenderingId(null);
+    }
+  }
+
+  return (
+    <>
+      <button className="back-link" onClick={onBack}>← Back to Production Queue</button>
+      <div className="page-head">
+        <div className="eyebrow">Production</div>
+        <h1>{job.propertyAddress}</h1>
+        <p>
+          {renders.length} image{renders.length === 1 ? "" : "s"} generated across {prompts.length} ordered
+          render{prompts.length === 1 ? "" : "s"}.
+        </p>
+      </div>
+
+      {error && <p className="error-text">{error}</p>}
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        {job.curbappealPhotoKey && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="detail-photo" src={`/api/admin/media/${job.curbappealPhotoKey}`} alt="Uploaded property photo" />
+        )}
+        {neighborhood?.street_view_key && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            className="detail-photo"
+            src={`/api/admin/media/${neighborhood.street_view_key}`}
+            alt="Street View of the surrounding block"
+          />
+        )}
+      </div>
+
+      <PropertyContextBlocks
+        analysis={analysis}
+        regulatory={regulatory}
+        neighborhood={neighborhood}
+        topMatches={topMatches}
+        curationRanks={curationRanks}
+      />
+
+      <div className="section-block">
+        <h3>Renders</h3>
+        {prompts.length === 0 && <p className="note">No render on this job has a style assigned.</p>}
+
+        {prompts.map((p, i) => {
+          const mine = renders.filter((r) => r.style_id === p.styleId);
+          return (
+            <div key={p.orderItemId} style={{ marginTop: 22 }}>
+              <strong>
+                Render #{i + 1} — {p.styleName}{" "}
+                <span className="note">({p.tier === "premium" ? "Premium" : "Curated"})</span>
+              </strong>
+              <div className="note" style={{ marginTop: 2 }}>
+                {p.source === "qc_approved"
+                  ? "Using the instruction QC approved."
+                  : "No QC-approved instruction found for this style — rebuilt from the catalog."}
+              </div>
+
+              <textarea
+                className="prompt-box"
+                value={promptText(p)}
+                onChange={(e) => setEdited((cur) => ({ ...cur, [p.orderItemId]: e.target.value }))}
+                rows={12}
+              />
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 6 }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => renderSlot(p)}
+                  disabled={renderingId !== null}
+                >
+                  {renderingId === p.orderItemId
+                    ? "Rendering… (up to a minute)"
+                    : mine.length > 0
+                      ? "Render Again"
+                      : "Render with AI"}
+                </button>
+                <span className="note">
+                  {mine.length} image{mine.length === 1 ? "" : "s"} so far
+                </span>
+              </div>
+
+              {mine.length > 0 && (
+                <div className="render-grid">
+                  {mine.map((r) => (
+                    <figure key={r.id} className="render-out">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/admin/media/${r.delivered_key ?? r.storage_key}`}
+                        alt={`${r.style_name} render, iteration ${r.iteration_number}`}
+                      />
+                      <figcaption>
+                        v{r.iteration_number} — {r.qc_status}
+                        {r.selected ? " — selected" : ""}
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </>
   );
 }

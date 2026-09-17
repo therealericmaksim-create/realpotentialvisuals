@@ -15,6 +15,33 @@ or restore the exact code at any version: `git checkout v0.1.0`.
   **The migration must be applied before this code is deployed** — QC
   approval is the only path that writes the status, and the old CHECK
   would reject the new value.
+- **Built the Production Queue and Production workspace** (`GET
+  /api/admin/production`, `GET /api/admin/production/[jobId]`, `POST
+  /api/admin/production/[jobId]/render`). The queue lists orders at
+  `in_production`; opening one gives the same evidence panel as the QC
+  workspace plus, per ordered render, the instruction and a **Render with
+  AI** button.
+- **Rendering actually generates an image now.** `lib/renderGeneration.ts`
+  calls OpenAI's image EDIT endpoint with the customer's own photo as the
+  input image, not text-to-image: the promise is "your actual house,
+  restyled", and a text-only generation cannot keep it no matter how
+  detailed the prompt. The result is written to R2 under `renders/` and
+  recorded in the `renders` table with an iteration number, the staff
+  member as designer, and a link to the prompt_generations row it came
+  from.
+- New renders land at `qc_status='pending'` and `selected=0`. The customer
+  order page only ever shows approved+selected renders, so generating can
+  never accidentally publish a bad image to the person who paid for it.
+- Production prefers the prompt QC approved (newest `prompt_generations`
+  row for that style) over a fresh rebuild, the opposite of the QC
+  workspace. QC reviews the current best instruction; production has to
+  render what was actually signed off. The UI says which one it is using.
+- Extracted `lib/jobWorkspace.ts` — the QC and Production workspaces load
+  identical property evidence, and each stage re-checks the previous one's
+  work, which only means something if both see the same information.
+- Admin nav: **Production Queue** added (Production group, with a
+  dashboard badge and stat card); *Material Selections* and *Render
+  Iterations* removed.
 
 ## v0.19.0 — 2026-09-17
 

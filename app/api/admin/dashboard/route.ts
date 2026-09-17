@@ -17,7 +17,7 @@ export async function GET() {
 
   const dailyIntakeCap = await getDailyIntakeCap(db, env);
 
-  const [awaitingAnalysis, awaitingCuration, awaitingQc, openRequests, openEscalations, todayIntake] =
+  const [awaitingAnalysis, awaitingCuration, awaitingQc, awaitingProduction, openRequests, openEscalations, todayIntake] =
     await Promise.all([
       db
         // 'placed' IS "awaiting analysis" — an order sits at this status
@@ -60,6 +60,11 @@ export async function GET() {
         .prepare(`SELECT COUNT(*) as n FROM orders WHERE status = 'in_qc'`)
         .first<{ n: number }>(),
       db
+        // Orders QC has signed off on, now waiting for their images to be
+        // generated in the Production Queue.
+        .prepare(`SELECT COUNT(*) as n FROM orders WHERE status = 'in_production'`)
+        .first<{ n: number }>(),
+      db
         .prepare(`SELECT COUNT(*) as n FROM custom_requests WHERE status = 'awaiting_quote'`)
         .first<{ n: number }>(),
       db
@@ -75,6 +80,7 @@ export async function GET() {
     awaitingAnalysis: awaitingAnalysis?.n ?? 0,
     awaitingCuration: awaitingCuration?.n ?? 0,
     awaitingQc: awaitingQc?.n ?? 0,
+    awaitingProduction: awaitingProduction?.n ?? 0,
     openRequests: openRequests?.n ?? 0,
     openEscalations: openEscalations?.n ?? 0,
     todayIntake: todayIntake?.reserved_count ?? 0,
