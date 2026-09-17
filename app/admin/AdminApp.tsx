@@ -16,7 +16,7 @@ import {
 } from "@/lib/pricing";
 import { STYLE_FAMILIES } from "@/lib/styles";
 import { orderStatusLabel } from "@/lib/orderDisplay";
-import { stageLabel } from "@/lib/orderStage";
+import { stageLabel, ORDER_ITEM_STAGES } from "@/lib/orderStage";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import "./admin.css";
 
@@ -524,23 +524,39 @@ function DashboardSection({
   );
 }
 
-type OrderListRow = {
-  id: string;
-  status: string;
+// One row per render. Stages live on order_items, so an order-level row
+// could only show a rolled-up status that hides the real state — an order
+// with one render in production and another back with the curator would
+// read as a single misleading value. Rows belonging to the same order are
+// grouped: the order id, photo and delete control appear once, on the
+// first row of the group.
+type OrderRenderRow = {
+  order_id: string;
+  order_status: string;
   property_address: string | null;
   customer_email: string | null;
   job_id: string | null;
   created_at: string;
   curbappeal_photo_key: string | null;
+  item_id: string | null;
+  tier: string | null;
+  stage: string | null;
+  style_name: string | null;
+  custom_text: string | null;
+  qc_denied_reason: string | null;
+  qc_denied_style: string | null;
 };
 
-// Mirrors the orders.status CHECK constraint exactly (realpotential-schema.sql)
-// — kept here so the filter never drifts from what the column actually allows.
-const ORDER_STATUSES = [
-  "started", "verified", "queued", "placed", "analyzing", "in_curation",
-  "awaiting_selection", "in_progress", "in_qc", "complete", "cancelled",
-  "refunded", "error",
-];
+function renderDescription(r: OrderRenderRow): string {
+  if (!r.item_id) return "No renders on this order";
+  const tier = TIER_LABELS[r.tier as keyof typeof TIER_LABELS] ?? r.tier ?? "—";
+  if (r.tier === "premium") {
+    const req = (r.custom_text ?? "").trim();
+    const short = req.length > 60 ? `${req.slice(0, 60)}…` : req;
+    return `${tier} — ${r.style_name || short || "custom request"}`;
+  }
+  return `${tier} — ${r.style_name || "style not yet assigned"}`;
+}
 
 function OrdersListSection({
   onOpenOrder,
@@ -553,17 +569,17 @@ function OrdersListSection({
   onQueryConsumed: () => void;
   isPrincipal: boolean;
 }) {
-  const [orders, setOrders] = useState<OrderListRow[] | null>(null);
+  const [renders, setRenders] = useState<OrderRenderRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState(initialQuery);
-  const [statusFilter, setStatusFilter] = useState("");
+  const [stageFilter, setStageFilter] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/admin/orders")
       .then(async (r) => {
         const text = await r.text();
-        let parsed: { orders?: OrderListRow[]; error?: string } | null = null;
+        let parsed: { renders?: OrderRenderRow[]; error?: string } | null = null;
         try {
           parsed = JSON.parse(text);
         } catch {
@@ -578,9 +594,9 @@ function OrdersListSection({
         if (!r.ok) {
           throw new Error(`HTTP ${r.status} — ${parsed?.error ?? "unknown error"}`);
         }
-        return parsed as { orders: OrderListRow[] };
+        return parsed as { renders: OrderRenderRow[] };
       })
-      .then((d) => setOrders(d.orders ?? []))
+      .then((d) => setRenders(d.renders ?? []))
       .catch((e: Error) => setError(`Failed to load orders: ${e.message}`));
   }, []);
 
@@ -588,12 +604,22 @@ function OrdersListSection({
     load();
   }, [load]);
 
-  async function deleteOrder(o: OrderListRow) {
-    const label = o.property_address || o.customer_email || o.id;
-    if (!window.confirm(`Permanently delete the order for "${label}"? This can't be undone.`)) return;
-    setDeletingId(o.id);
+  // Deleting is still an ORDER-level action — it removes the order and
+  // every render on it. A per-render delete would be a different feature
+  // with money attached (the customer paid for that line item), so this
+  // control says "order" explicitly rather than sitting ambiguously on a
+  // render row.
+  async function deleteOrder(r: OrderRenderRow) {
+    const label = r.property_address || r.customer_email || r.order_id;
+    if (
+      !window.confirm(
+        `Permanently delete the ENTIRE order for "${label}", including every render on it? This can't be undone.`
+      )
+    )
+      return;
+    setDeletingId(r.order_id);
     try {
-      await fetch(`/api/admin/orders/${o.id}`, { method: "DELETE" });
+      await fetch(`/api/admin/orders/${r.order_id}`, { method: "DELETE" });
       load();
     } finally {
       setDeletingId(null);
@@ -611,49 +637,51 @@ function OrdersListSection({
   }, [initialQuery]);
 
   const q = query.trim().toLowerCase();
-  const filtered = orders
-    ? orders.filter((o) => {
-        if (statusFilter && o.status !== statusFilter) return false;
+  const filtered = renders
+    ? renders.filter((r) => {
+        if (stageFilter && r.stage !== stageFilter) return false;
         if (!q) return true;
         return (
-          o.id.toLowerCase().includes(q) ||
-          (o.property_address ?? "").toLowerCase().includes(q) ||
-          (o.customer_email ?? "").toLowerCase().includes(q) ||
-          o.status.toLowerCase().includes(q)
+          r.order_id.toLowerCase().includes(q) ||
+          (r.property_address ?? "").toLowerCase().includes(q) ||
+          (r.customer_email ?? "").toLowerCase().includes(q) ||
+          (r.style_name ?? "").toLowerCase().includes(q) ||
+          (r.custom_text ?? "").toLowerCase().includes(q) ||
+          stageLabel(r.stage ?? "").toLowerCase().includes(q)
         );
       })
-    : orders;
+    : renders;
 
   return (
     <>
       <div className="page-head">
         <div className="eyebrow">Orders</div>
         <h1>All Orders</h1>
-        <p>Every order placed, most recent first.</p>
+        <p>Every render ordered, newest order first. Renders on the same order are grouped together.</p>
       </div>
       <div className="section-block">
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
           <input
             type="text"
-            placeholder="Filter by address, email, status, or order id…"
+            placeholder="Filter by address, email, style, stage, or order id…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{ maxWidth: 420, flex: 1 }}
           />
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--text-dim)" }}>
             Show only:
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">All statuses</option>
-              {ORDER_STATUSES.map((s) => (
-                <option key={s} value={s}>{orderStatusLabel(s)}</option>
+            <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)}>
+              <option value="">All stages</option>
+              {ORDER_ITEM_STAGES.map((st) => (
+                <option key={st} value={st}>{stageLabel(st)}</option>
               ))}
             </select>
           </label>
         </div>
         {error && <p className="error-text">{error}</p>}
-        {!orders && !error && <p className="loading">Loading…</p>}
+        {!renders && !error && <p className="loading">Loading…</p>}
         {filtered && filtered.length === 0 && (
-          <p className="loading">{q || statusFilter ? "No orders match that filter." : "No orders yet."}</p>
+          <p className="loading">{q || stageFilter ? "No renders match that filter." : "No orders yet."}</p>
         )}
         {filtered && filtered.length > 0 && (
           <table className="data">
@@ -661,50 +689,74 @@ function OrdersListSection({
               <tr>
                 <th></th>
                 <th>Order</th>
+                <th>Render</th>
                 <th>Status</th>
                 <th>Address</th>
                 <th>Customer</th>
-                <th>Ready for analysis?</th>
                 {isPrincipal && <th></th>}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((o) => (
-                <tr key={o.id} className="clickable" onClick={() => onOpenOrder(o.id)}>
-                  <td>
-                    {o.curbappeal_photo_key ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        className="order-thumb"
-                        src={`/api/admin/media/${o.curbappeal_photo_key}`}
-                        alt=""
-                      />
-                    ) : (
-                      <div className="order-thumb order-thumb-empty" />
-                    )}
-                  </td>
-                  <td style={{ fontFamily: "monospace", fontSize: 12 }}>{o.id}</td>
-                  <td><span className="pill">{orderStatusLabel(o.status)}</span></td>
-                  <td>{o.property_address ?? "—"}</td>
-                  <td>{o.customer_email ?? "—"}</td>
-                  <td>{o.job_id ? "yes" : "no"}</td>
-                  {isPrincipal && (
-                    <td style={{ whiteSpace: "nowrap" }}>
-                      <button
-                        className="stat-link"
-                        style={{ color: "var(--leg)" }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteOrder(o);
-                        }}
-                        disabled={deletingId === o.id}
-                      >
-                        {deletingId === o.id ? "Deleting…" : "Delete"}
-                      </button>
+              {filtered.map((r, i) => {
+                // Group start is computed against the FILTERED list, so the
+                // order id and delete control stay visible even when a
+                // filter hides the order's other renders.
+                const isGroupStart = i === 0 || filtered[i - 1].order_id !== r.order_id;
+                return (
+                  <tr
+                    key={r.item_id ?? r.order_id}
+                    className={`clickable${isGroupStart ? " order-group-start" : ""}`}
+                    onClick={() => onOpenOrder(r.order_id)}
+                  >
+                    <td>
+                      {isGroupStart &&
+                        (r.curbappeal_photo_key ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            className="order-thumb"
+                            src={`/api/admin/media/${r.curbappeal_photo_key}`}
+                            alt=""
+                          />
+                        ) : (
+                          <div className="order-thumb order-thumb-empty" />
+                        ))}
                     </td>
-                  )}
-                </tr>
-              ))}
+                    <td style={{ fontFamily: "monospace", fontSize: 12 }}>
+                      {isGroupStart ? r.order_id : ""}
+                    </td>
+                    <td>
+                      {renderDescription(r)}
+                      {r.qc_denied_reason && (
+                        <div className="qc-denied">
+                          QC sent back{r.qc_denied_style ? ` (${r.qc_denied_style})` : ""}: {r.qc_denied_reason}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      {r.stage ? <span className="pill">{stageLabel(r.stage)}</span> : <span className="note">—</span>}
+                    </td>
+                    <td>{isGroupStart ? r.property_address ?? "—" : ""}</td>
+                    <td>{isGroupStart ? r.customer_email ?? "—" : ""}</td>
+                    {isPrincipal && (
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        {isGroupStart && (
+                          <button
+                            className="stat-link"
+                            style={{ color: "var(--leg)" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteOrder(r);
+                            }}
+                            disabled={deletingId === r.order_id}
+                          >
+                            {deletingId === r.order_id ? "Deleting…" : "Delete order"}
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
