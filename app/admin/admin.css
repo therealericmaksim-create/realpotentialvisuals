@@ -183,6 +183,16 @@
 .rpv-admin .render-ref{font-family:var(--plate);font-size:11.5px;color:var(--exec);letter-spacing:.04em}
 .rpv-admin .stale-prompt{margin-top:8px;padding:10px 12px;border-radius:6px;font-size:12.5px;
   line-height:1.55;color:var(--text);background:var(--panel-3);border-left:3px solid var(--leg)}
+/* A render opened from a queue leads, visibly. Its siblings on the same
+   order sit below it and are obviously siblings rather than copies — two
+   renders on one order share an order number and differ only in the
+   trailing digit, which reads as a duplicate at a glance. */
+.rpv-admin .render-block{padding-left:12px;border-left:3px solid transparent}
+.rpv-admin .render-block.focused{border-left-color:var(--ops);background:var(--ops-dim);
+  padding:12px;border-radius:0 8px 8px 0}
+.rpv-admin .focus-tag{font-family:var(--plate);font-size:9.5px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ops);background:var(--panel-3);
+  border:1px solid var(--border);border-radius:10px;padding:2px 8px;margin-left:8px}
 .rpv-admin .revise-box{width:100%;margin-top:8px;background:var(--panel-2);border:1px solid var(--border);
   border-radius:6px;color:var(--text);padding:7px 9px;font-family:inherit;font-size:12px;
   line-height:1.5;resize:vertical}

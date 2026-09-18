@@ -122,6 +122,12 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
   const [section, setSection] = useState<string>("dashboard");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  // The render the operator actually clicked in a queue. The workspaces
+  // are per JOB, so without this, clicking one render opens a page showing
+  // all of that job's renders at the same stage — which reads as
+  // duplicates when they share an order number and differ only in the
+  // trailing digit.
+  const [focusItemId, setFocusItemId] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [identity, setIdentity] = useState<IdentityProfile["identity"]>(null);
   const [staffMenuOpen, setStaffMenuOpen] = useState(false);
@@ -192,20 +198,23 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
     setNavToken((t) => t + 1);
   }
 
-  function openJob(id: string) {
+  function openJob(id: string, itemId?: string) {
     setSelectedJobId(id);
+    setFocusItemId(itemId ?? null);
     setSection("curation-workspace");
     setNavToken((t) => t + 1);
   }
 
-  function openQcJob(id: string) {
+  function openQcJob(id: string, itemId?: string) {
     setSelectedJobId(id);
+    setFocusItemId(itemId ?? null);
     setSection("qc-detail");
     setNavToken((t) => t + 1);
   }
 
-  function openProductionJob(id: string) {
+  function openProductionJob(id: string, itemId?: string) {
     setSelectedJobId(id);
+    setFocusItemId(itemId ?? null);
     setSection("production-detail");
     setNavToken((t) => t + 1);
   }
@@ -431,6 +440,7 @@ export default function AdminApp({ staff }: { staff: StaffInfo }) {
             <ProductionWorkspaceSection
               key={navToken}
               jobId={selectedJobId}
+              focusItemId={focusItemId}
               onBack={() => goTo("production-queue")}
               onRendered={loadDashboard}
             />
@@ -1950,7 +1960,7 @@ function RenderQueueSection({
   blurb: string;
   endpoint: string;
   actionLabel: string;
-  onOpenJob: (jobId: string) => void;
+  onOpenJob: (jobId: string, itemId?: string) => void;
 }) {
   const [renders, setRenders] = useState<RenderQueueRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -2003,7 +2013,7 @@ function RenderQueueSection({
             </thead>
             <tbody>
               {renders.map((r) => (
-                <tr key={r.item_id} className="clickable" onClick={() => onOpenJob(r.job_id)}>
+                <tr key={r.item_id} className="clickable" onClick={() => onOpenJob(r.job_id, r.item_id)}>
                   <td>
                     {r.curbappeal_photo_key ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -2035,7 +2045,7 @@ function RenderQueueSection({
                       className="btn-primary"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onOpenJob(r.job_id);
+                        onOpenJob(r.job_id, r.item_id);
                       }}
                     >
                       {actionLabel}
@@ -2720,10 +2730,12 @@ type ProductionWorkspaceData = {
 
 function ProductionWorkspaceSection({
   jobId,
+  focusItemId,
   onBack,
   onRendered,
 }: {
   jobId: string;
+  focusItemId: string | null;
   onBack: () => void;
   onRendered: () => void;
 }) {
@@ -2770,7 +2782,15 @@ function ProductionWorkspaceSection({
   if (error && !data) return <p className="error-text">{error}</p>;
   if (!data) return <p className="loading">Loading…</p>;
 
-  const { job, slots, prompts, renders, analysis, topMatches, curationRanks, regulatory, neighborhood } = data;
+  const { job, slots, renders, analysis, topMatches, curationRanks, regulatory, neighborhood } = data;
+  // The clicked render leads; its siblings on the same job follow, clearly
+  // marked as such rather than sitting there looking like copies of it.
+  const prompts = focusItemId
+    ? [...data.prompts].sort((a, b) =>
+        a.orderItemId === focusItemId ? -1 : b.orderItemId === focusItemId ? 1 : 0
+      )
+    : data.prompts;
+  const others = focusItemId ? prompts.filter((p) => p.orderItemId !== focusItemId).length : 0;
 
   function promptText(p: ProductionPrompt): string {
     return edited[p.orderItemId] ?? p.assembledPrompt;
@@ -2878,6 +2898,10 @@ function ProductionWorkspaceSection({
         <p>
           {renders.length} image{renders.length === 1 ? "" : "s"} generated across {prompts.length} ordered
           render{prompts.length === 1 ? "" : "s"}.
+          {others > 0 &&
+            ` You opened one render; the other ${others} on this order ${
+              others === 1 ? "is" : "are"
+            } also in production and shown below it.`}
         </p>
       </div>
 
@@ -2916,14 +2940,20 @@ function ProductionWorkspaceSection({
         {prompts.map((p, i) => {
           const mine = renders.filter((r) => r.style_id === p.styleId);
           const slot = slots.find((sl) => sl.id === p.orderItemId);
+          const isFocused = focusItemId === p.orderItemId;
           return (
-            <div key={p.orderItemId} style={{ marginTop: 22 }}>
+            <div
+              key={p.orderItemId}
+              className={isFocused ? "render-block focused" : "render-block"}
+              style={{ marginTop: 22 }}
+            >
               <strong>
                 <span className="render-ref">
                   {slot ? renderLabel(slot.order_id, slot.render_no) : `Render #${i + 1}`}
                 </span>{" "}
                 {p.styleName}{" "}
                 <span className="note">({p.tier === "premium" ? "Premium" : "Curated"})</span>
+                {isFocused && others > 0 && <span className="focus-tag">the one you opened</span>}
               </strong>
               <div className="note" style={{ marginTop: 2 }}>
                 {p.source === "qc_approved"

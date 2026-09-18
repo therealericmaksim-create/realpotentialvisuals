@@ -3,6 +3,19 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.25.1 — 2026-09-18
+
+- **Opening a render from a queue now focuses that render.** The queues
+  became per-render in v0.23.1, but the workspaces behind them are still
+  per JOB — so clicking one render opened a page listing every render on
+  that job at the same stage. With two renders from one order
+  (#CC95B419-1 and #CC95B419-2) the references differ only in the trailing
+  digit, so the page read as showing the same render twice. Nothing was
+  duplicated; the data was correct throughout. The clicked render is now
+  listed first, highlighted, and tagged "the one you opened", and the
+  header says plainly how many other renders on that order share the
+  stage and are shown below it.
+
 ## v0.25.0 — 2026-09-18
 
 - **Revise from a generated image.** Each render in the Production
