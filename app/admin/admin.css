@@ -183,6 +183,22 @@
 .rpv-admin .render-ref{font-family:var(--plate);font-size:11.5px;color:var(--exec);letter-spacing:.04em}
 .rpv-admin .stale-prompt{margin-top:8px;padding:10px 12px;border-radius:6px;font-size:12.5px;
   line-height:1.55;color:var(--text);background:var(--panel-3);border-left:3px solid var(--leg)}
+.rpv-admin .revise-box{width:100%;margin-top:8px;background:var(--panel-2);border:1px solid var(--border);
+  border-radius:6px;color:var(--text);padding:7px 9px;font-family:inherit;font-size:12px;
+  line-height:1.5;resize:vertical}
+.rpv-admin .style-search{margin:4px 0 10px;padding:10px;background:var(--panel-3);
+  border:1px solid var(--border);border-radius:8px}
+.rpv-admin .style-search-bar{display:flex;gap:8px;align-items:center}
+.rpv-admin .style-search-bar input{flex:1;background:var(--panel-2);border:1px solid var(--border);
+  border-radius:6px;color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit}
+.rpv-admin .style-hits{display:flex;flex-direction:column;gap:8px;margin-top:10px;
+  max-height:330px;overflow-y:auto}
+.rpv-admin .style-hit{text-align:left;width:100%;background:var(--panel-2);border:1px solid var(--border);
+  border-radius:6px;padding:9px 11px;color:var(--text);font:inherit;cursor:pointer}
+.rpv-admin .style-hit:hover{border-color:var(--ops)}
+.rpv-admin .style-hit-head{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:3px}
+.rpv-admin .style-hit-desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;margin-top:3px}
 .rpv-admin .qc-decide{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
 .rpv-admin .qc-decide input[type=text]{flex:1;min-width:240px;background:var(--panel-2);
   border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;

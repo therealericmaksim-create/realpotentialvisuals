@@ -2150,6 +2150,93 @@ function slotLabel(slot: CurationSlot): string {
   return extras.length > 0 ? extras.join(", ") : "no extras";
 }
 
+type StyleHit = {
+  id: string;
+  name: string;
+  family: string;
+  description: string | null;
+  materials: string | null;
+  matched_on: string;
+};
+
+// The 133-style dropdown is grouped by family, which only helps a curator
+// who already knows the family. It cannot answer "which styles suit a
+// brick house" — the question that comes up the moment a customer asks
+// for something the building physically cannot take. This searches the
+// style's own description and material palette, so "brick" returns the
+// styles whose materials actually include it.
+function StyleSearch({ onPick }: { onPick: (styleName: string) => void }) {
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<StyleHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run() {
+    const term = q.trim();
+    if (term.length < 2) return;
+    setSearching(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/admin/styles/search?q=${encodeURIComponent(term)}`);
+      const text = await r.text();
+      let parsed: { styles?: StyleHit[]; error?: string } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 160)}`);
+      }
+      if (!r.ok) throw new Error(parsed?.error ?? `HTTP ${r.status}`);
+      setHits(parsed?.styles ?? []);
+    } catch (e) {
+      setError(`Style search failed: ${(e as Error).message}`);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  return (
+    <div className="style-search">
+      <div className="style-search-bar">
+        <input
+          type="text"
+          placeholder="Search styles by description or material — e.g. brick, stucco, porch, steep roof…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              run();
+            }
+          }}
+        />
+        <button type="button" className="btn-primary" onClick={run} disabled={searching || q.trim().length < 2}>
+          {searching ? "Searching…" : "Search"}
+        </button>
+      </div>
+
+      {error && <p className="error-text">{error}</p>}
+      {hits && hits.length === 0 && <p className="note">No styles match that.</p>}
+
+      {hits && hits.length > 0 && (
+        <div className="style-hits">
+          {hits.map((h) => (
+            <button key={h.id} type="button" className="style-hit" onClick={() => onPick(h.name)}>
+              <div className="style-hit-head">
+                <strong>{h.name}</strong>
+                <span className="note">
+                  {h.family} · matched on {h.matched_on}
+                </span>
+              </div>
+              {h.materials && <div className="note">Materials: {h.materials}</div>}
+              {h.description && <div className="note style-hit-desc">{h.description}</div>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function JobCurationWorkspaceSection({
   jobId,
   onBack,
@@ -2310,6 +2397,7 @@ function JobCurationWorkspaceSection({
                   {s.qc_denied_style ? ` — ${s.qc_denied_style} was rejected` : ""}: {s.qc_denied_reason}
                 </span>
               )}
+              <StyleSearch onPick={(name) => setAssignment(s.id, name)} />
               <select value={assignments[s.id] ?? ""} onChange={(e) => setAssignment(s.id, e.target.value)}>
                 <option value="">Select a style…</option>
                 {curationRanks.length > 0 && (
@@ -2652,6 +2740,11 @@ function ProductionWorkspaceSection({
   const [switched, setSwitched] = useState<Record<string, string>>({});
   // Per-render failure text, shown next to that render's own button.
   const [renderError, setRenderError] = useState<Record<string, string>>({});
+  // Revision instructions, keyed by the IMAGE being revised rather than
+  // the render slot — an operator may want to revise an earlier iteration
+  // rather than the latest one.
+  const [revisionText, setRevisionText] = useState<Record<string, string>>({});
+  const [revisingId, setRevisingId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch(`/api/admin/production/${jobId}`)
@@ -2710,6 +2803,42 @@ function ProductionWorkspaceSection({
       setError(`Could not accept that image: ${(e as Error).message}`);
     } finally {
       setAcceptingId(null);
+    }
+  }
+
+  // Feeds a generated image back in as the source with a narrow change
+  // instruction. Distinct from rendering, which always starts from the
+  // customer's photo — worth keeping separate, because a revision
+  // inherits whatever the previous pass got wrong.
+  async function reviseImage(p: ProductionPrompt, renderId: string) {
+    const change = (revisionText[renderId] ?? "").trim();
+    if (!change) return;
+    setRevisingId(renderId);
+    setError(null);
+    try {
+      const r = await fetch(`/api/admin/production/${jobId}/revise`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderItemId: p.orderItemId, sourceRenderId: renderId, change }),
+      });
+      const text = await r.text();
+      let parsed: { error?: string } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error(`HTTP ${r.status} — non-JSON response: ${text.slice(0, 200)}`);
+      }
+      if (!r.ok) throw new Error(parsed?.error ?? `HTTP ${r.status}`);
+      setRevisionText((cur) => ({ ...cur, [renderId]: "" }));
+      load();
+      onRendered();
+    } catch (e) {
+      setRenderError((cur) => ({
+        ...cur,
+        [p.orderItemId]: `Revision failed: ${(e as Error).message}`,
+      }));
+    } finally {
+      setRevisingId(null);
     }
   }
 
@@ -2886,9 +3015,31 @@ function ProductionWorkspaceSection({
                         className="btn-primary"
                         style={{ marginTop: 6, width: "100%" }}
                         onClick={() => acceptAsComplete(p, r.id)}
-                        disabled={acceptingId !== null}
+                        disabled={acceptingId !== null || revisingId !== null}
                       >
                         {acceptingId === r.id ? "Accepting…" : "Accept as Complete"}
+                      </button>
+                      <textarea
+                        className="revise-box"
+                        placeholder="Change to make from THIS image — e.g. darken the shutters, remove the porch light…"
+                        value={revisionText[r.id] ?? ""}
+                        onChange={(e) =>
+                          setRevisionText((cur) => ({ ...cur, [r.id]: e.target.value }))
+                        }
+                        rows={3}
+                      />
+                      <button
+                        type="button"
+                        className="cfg-remove"
+                        style={{ width: "100%" }}
+                        onClick={() => reviseImage(p, r.id)}
+                        disabled={
+                          revisingId !== null ||
+                          acceptingId !== null ||
+                          !(revisionText[r.id] ?? "").trim()
+                        }
+                      >
+                        {revisingId === r.id ? "Revising… (up to a minute)" : "Revise This Image"}
                       </button>
                     </figure>
                   ))}

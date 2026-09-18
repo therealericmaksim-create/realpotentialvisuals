@@ -3,6 +3,32 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.25.0 — 2026-09-18
+
+- **Revise from a generated image.** Each render in the Production
+  workspace now has a box for the one change to make and a "Revise This
+  Image" button, which feeds that image back in as the source rather than
+  starting again from the customer's photo. It is its own route, not a
+  mode of rendering, because the two are genuinely different jobs: a
+  revision inherits whatever the previous pass got wrong and drifts a
+  little further from the real house each round, so the revision prompt is
+  deliberately narrow and restates every hard constraint — the model has
+  no memory of the brief that produced the image it is handed. When a
+  render is wrong structurally rather than cosmetically, re-rendering from
+  the photo is still the right move. Revisions land at pending and
+  not-selected like any render, so revising never republishes to the
+  customer by itself, and each one records its parent image and the
+  instruction given.
+- **Style search by description and material.** The 133-style dropdown is
+  grouped by family, which only helps a curator who already knows the
+  family — it could not answer "which styles suit a brick house", the
+  question that arises the moment a customer asks for something the
+  building physically cannot take. The curation workspace now has a search
+  box covering style descriptions AND typical material palettes, and says
+  why each result matched. Searching "brick" surfaces American Foursquare,
+  Colonial Georgian and Atomic Ranch on their materials rather than on a
+  passing mention in prose. Clicking a result assigns it to that render.
+
 ## v0.24.0 — 2026-09-18
 
 - **Prompt template v4, from a second real render.** The render at

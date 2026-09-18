@@ -29,6 +29,34 @@ export const PROMPT_TEMPLATE_VERSION = "rpv-retexture-v4";
 // construction — full_generation would mean abandoning the source photo.
 export const PROMPT_GENERATION_MODE = "retexture";
 
+// A revision works on an ALREADY-STYLED render rather than the customer's
+// photo, so it is a different job from the initial restyle: almost nothing
+// should change. The danger is drift — each pass moves further from the
+// real house — so the instruction is deliberately narrow, and the same
+// hard constraints are restated because the model has no memory of the
+// brief that produced the image it is being handed.
+export function buildRevisionPrompt(styleName: string, change: string): string {
+  return [
+    `REVISE THIS IMAGE. The image provided is an existing ${styleName} visualization of one specific real house. Apply ONLY the change described below, and leave every other pixel's content as it is.`,
+
+    `REQUESTED CHANGE:\n${change.trim()}`,
+
+    `EVERYTHING ELSE IS FIXED. Unless the requested change explicitly says otherwise:
+   - Same building: same footprint, massing, storey count, roofline and pitch.
+   - Same openings: the SAME NUMBER of doors and windows, each at its existing position, width, height and proportion. Do not merge entrances, do not add or remove openings, do not regularise or evenly space them.
+   - Same materials, including any masonry, which is never re-clad.
+   - Same gutters, downspouts, vents, meters and other building hardware, all still present.
+   - Same driveway, walkways, steps, fencing, retaining walls and every plant, tree and bed.
+   - Same neighbouring buildings, street and surroundings.
+   - Same camera position, angle, framing, crop and aspect ratio.
+   - Same lighting, time of day, season, weather and shadow direction.`,
+
+    `If the requested change cannot be made without altering something in that list, make the part that can be made and leave the rest untouched. A conservative revision is correct; a re-imagined one is not.`,
+
+    `OUTPUT: a single photorealistic exterior photograph, same framing and aspect ratio as the image provided.`,
+  ].join("\n\n");
+}
+
 export type PromptSlot = {
   orderItemId: string;
   tier: string;
