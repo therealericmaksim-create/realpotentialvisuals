@@ -3,6 +3,29 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.24.0 — 2026-09-18
+
+- **Prompt template v4, from a second real render.** The render at
+  00:49 is confirmed to have used v3 with gpt-image-2 (the new per-render
+  instrumentation recorded it), and it still lost one of a duplex-s two
+  front doors — the second being partly hidden in the source photo — and
+  visibly changed one front window-s dimensions. v3 protected openings in
+  a single line inside the geometry section; that was not enough weight
+  for the failure mode these models actually have, which is quietly
+  SIMPLIFYING a building rather than redesigning it.
+- Openings now get their own numbered section that says to COUNT the doors
+  and windows first and reproduce those counts exactly, calls out
+  duplexes and second entrances hidden behind posts, planting, downpipes
+  or shadow, and forbids regularising, aligning or evenly spacing openings
+  — because asymmetry is what makes a specific house that house.
+- A new section states that partially obscured features are still there
+  and must not be deleted, merged or resolved into a tidier arrangement.
+  The opening line of the prompt now primes the model to read and count
+  before rendering, and names simplification as the most common failure.
+- The negative prompt gained the matching failure signatures: merged front
+  doors, removed second door, added window, regularised windows, changed
+  window proportions, simplified facade.
+
 ## v0.23.2 — 2026-09-17
 
 - **Fixed: Render with AI failing in about a second with no image.** The

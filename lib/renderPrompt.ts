@@ -22,7 +22,7 @@
 // constraint section — not in a revision request, and not in the
 // operator's memory.
 
-export const PROMPT_TEMPLATE_VERSION = "rpv-retexture-v3";
+export const PROMPT_TEMPLATE_VERSION = "rpv-retexture-v4";
 
 // 'retexture' vs 'full_generation' is the prompt_generations CHECK
 // vocabulary. Everything this builder produces is a retexture by
@@ -90,7 +90,19 @@ const NEGATIVE_PROMPT = [
   "removed storey",
   "moved windows",
   "resized windows",
+  "enlarged window",
+  "shrunken window",
+  "changed window proportions",
+  "regularised windows",
+  "evenly spaced windows",
   "moved doors",
+  "merged front doors",
+  "removed second door",
+  "single door replacing two",
+  "missing entrance",
+  "added window",
+  "added door",
+  "simplified facade",
   "changed roof pitch",
   "changed roofline",
   "new addition",
@@ -272,7 +284,9 @@ export async function buildRenderPrompts(
     const parts: string[] = [];
 
     parts.push(
-      `TASK: Restyle the exterior surfaces of the house in this photograph into ${styleName.toUpperCase()}. This is a surface retexture of one specific real house, photographed as it exists today. The same building, on the same site, must be immediately recognisable in the result. You are redecorating it, not redesigning or rebuilding it.`
+      `TASK: Restyle the exterior surfaces of the house in this photograph into ${styleName.toUpperCase()}. This is a surface retexture of one specific real house, photographed as it exists today. The same building, on the same site, must be immediately recognisable in the result. You are redecorating it, not redesigning or rebuilding it.
+
+BEFORE YOU START, read the photograph and note: how many exterior doors it has, how many windows, and where each one sits. The result must match those counts and positions exactly. Most failures of this task come from quietly simplifying the building — merging two entrances into one, evening up windows that are genuinely uneven, or deleting something half-hidden. Reproduce the building as it is, awkwardness included.`
     );
 
     parts.push(
@@ -291,8 +305,17 @@ export async function buildRenderPrompts(
 
 2. BUILDING GEOMETRY
 ${structureLines(structure).join("\n")}
-   - Every window and door stays in its exact position, at its exact size and proportion. Openings are never moved, added, removed or resized.
    - Porches, stoops, garages, bays, dormers and attached structures keep their existing positions, footprints and rooflines.
+
+2a. OPENINGS — COUNT THEM, THEN REPRODUCE THEM EXACTLY
+   - Count every door and every window visible in the photograph. The result must contain the SAME NUMBER of each, in the same places.
+   - ENTRANCES: reproduce every exterior door. Many houses are duplexes or have a secondary entrance, and a second front door is often half-hidden behind a porch post, planting, a downpipe, a vehicle or deep shadow, or is foreshortened by the camera angle. A door that is hard to see is still a door. NEVER merge two entrances into one, remove one, or "tidy" a facade into a single-entry composition.
+   - WINDOWS: each window keeps its exact width, height, sill height, head height and proportion. Do not enlarge, shrink, stretch, square up or re-proportion any window. A window that is smaller, narrower or oddly placed compared with its neighbours is a real feature of this building, not a defect to correct.
+   - Do NOT regularise, align, balance or evenly space openings. Asymmetry and odd spacing are what make this house this house.
+   - Nothing is added: no new windows, no new doors, no new dormers, no decorative openings the photograph does not already contain.
+
+2b. PARTIALLY OBSCURED FEATURES ARE STILL THERE
+   - Anything the photograph only partly shows — hidden behind a shrub, a car, a post, a shadow, or cut off at the frame edge — must still be present, in the same place, at the same size. Do not delete it, do not merge it into a neighbouring feature, and do not invent a cleaner arrangement in its place. When a feature is ambiguous, reproduce what is visible rather than resolving the ambiguity in favour of a tidier facade.
 
 3. EXISTING MASONRY — NEVER RE-CLAD
    - Any brick, stone, block or other masonry visible on the house STAYS masonry, in the same place, over the same extent, in the same colour family. It is never replaced with siding, shingle, stucco, panel or board.
