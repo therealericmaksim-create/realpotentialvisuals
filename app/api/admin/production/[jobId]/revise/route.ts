@@ -4,6 +4,7 @@ import { getCurrentStaff } from "@/lib/currentStaff";
 import { getConfigValue } from "@/lib/systemConfig";
 import { generateRenderImage, DEFAULT_IMAGE_MODEL } from "@/lib/renderGeneration";
 import { buildRevisionPrompt, PROMPT_GENERATION_MODE } from "@/lib/renderPrompt";
+import { badgeRenderOrExplain } from "@/lib/watermark";
 
 // Revise an existing render: the generated image goes back in as the
 // source, with a narrow instruction describing the one thing to change.
@@ -113,11 +114,34 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }
 
-  // ---- The image exists; store and record it before anything else. ----
+  // ---- The image exists and must not be lost. ----
+
+  // The badge is composited here, deterministically, from the exact source
+  // file — never by the image model, which would redraw it. Every render
+  // carries it, so a failure here is fatal to this request: the raw image
+  // is parked under renders-raw/ so the money spent is not lost, but it
+  // never becomes a `renders` row, which is the only thing the customer
+  // can ever be shown.
+  const badged = await badgeRenderOrExplain(env.ASSETS, generated.bytes);
+  if (!badged.ok) {
+    const orphanKey = `renders-raw/${crypto.randomUUID()}.png`;
+    await env.MEDIA.put(orphanKey, generated.bytes, {
+      httpMetadata: { contentType: generated.contentType },
+    });
+    return NextResponse.json(
+      {
+        error:
+          `The image generated, but the "Not a real photo" badge could not be applied, ` +
+          `so it has not been saved as a render: ${badged.error}. ` +
+          `The raw image is parked at ${orphanKey}.`,
+      },
+      { status: 500 }
+    );
+  }
 
   const storageKey = `renders/${crypto.randomUUID()}.png`;
-  await env.MEDIA.put(storageKey, generated.bytes, {
-    httpMetadata: { contentType: generated.contentType },
+  await env.MEDIA.put(storageKey, badged.bytes, {
+    httpMetadata: { contentType: "image/png" },
   });
 
   const priorCount = await env.DB.prepare(

@@ -3,6 +3,35 @@
 Every entry here corresponds to a git tag (`v0.1.0`, `v0.2.0`, ...). To see
 or restore the exact code at any version: `git checkout v0.1.0`.
 
+## v0.26.0 — 2026-09-18
+
+- **Every render now carries the "Human Curated / AI-POWERED / Not a real
+  photo" badge, bottom-right, composited deterministically.** It is never
+  sent to the image model: asking a generative model to include a logo is
+  asking it to redraw one, and it would — mangled letterforms, invented
+  crowns, altered wording. The badge is a legal and trust statement, so it
+  is stamped pixel-for-pixel from the exact source file
+  (`public/images/render-overlay-ai.png`), and the only transformation
+  applied is a proportional downscale. No rotation, no recolouring, no
+  aspect change.
+- New `lib/watermark.ts` implements PNG decode, encode and alpha
+  compositing against the spec directly. No dependency was added: Workers
+  have no canvas, but they do expose `CompressionStream` /
+  `DecompressionStream`, which is the zlib layer PNG needs. Verified
+  lossless — decode → encode → decode returns byte-identical pixels — and
+  verified in composite: output dimensions unchanged, the rest of the
+  image untouched, all three lines of badge text legible.
+- Downscaling uses an area-average (box) filter rather than
+  nearest-neighbour or bilinear, specifically because the badge is mostly
+  small text and the other two alias "Not a real photo" into noise. The
+  badge occupies 30% of the render's width with a floor of 260px, so it
+  reads the same at any output size.
+- **A badge failure blocks delivery rather than passing an unbadged image
+  through.** If compositing fails, the generated image is parked under
+  `renders-raw/` so the money spent on it is not lost, but it never
+  becomes a `renders` row — and a `renders` row is the only thing the
+  customer can ever be shown. The operator gets the real reason.
+
 ## v0.25.1 — 2026-09-18
 
 - **Opening a render from a queue now focuses that render.** The queues
